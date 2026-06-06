@@ -5,13 +5,18 @@ namespace DbAdmin.Providers;
 using DbAdmin.Models;
 
 
-public sealed class MsSqlProvider 
+public sealed class MsSqlProvider
     : IDbProvider
 {
     private readonly Microsoft.Data.SqlClient.SqlConnection _conn;
+    private readonly System.Threading.SemaphoreSlim m_lock;
 
     public MsSqlProvider(string connectionString)
-        => _conn = new Microsoft.Data.SqlClient.SqlConnection(connectionString);
+    {
+        this._conn = new Microsoft.Data.SqlClient.SqlConnection(connectionString);
+        this.m_lock = new System.Threading.SemaphoreSlim(1, 1);
+    }
+
 
     public DbProvider ProviderType => DbProvider.MsSql;
 
@@ -23,36 +28,52 @@ public sealed class MsSqlProvider
     private async System.Threading.Tasks.Task<
         System.Collections.Generic.List<T>
         > QueryAsync<T>(
-        string sql, 
+        string sql,
         System.Func<Microsoft.Data.SqlClient.SqlDataReader, T> map,
         System.Action<Microsoft.Data.SqlClient.SqlCommand>? configure = null,
         System.Threading.CancellationToken ct = default
     )
     {
-        await using Microsoft.Data.SqlClient.SqlCommand cmd = _conn.CreateCommand();
-        cmd.CommandText = sql;
-        cmd.CommandTimeout = 60;
-        configure?.Invoke(cmd);
-        await using Microsoft.Data.SqlClient.SqlDataReader rdr = await cmd.ExecuteReaderAsync(ct);
-        System.Collections.Generic.List<T> list = 
-            new System.Collections.Generic.List<T>()
-        ;
+        await this.m_lock.WaitAsync(ct);
 
-        while (await rdr.ReadAsync(ct)) 
-            list.Add(map(rdr));
+        try
+        {
+            await using Microsoft.Data.SqlClient.SqlCommand cmd = _conn.CreateCommand();
+            cmd.CommandText = sql;
+            cmd.CommandTimeout = 60;
+            configure?.Invoke(cmd);
 
-        return list;
+            if (_conn.State != System.Data.ConnectionState.Open)
+                await _conn.OpenAsync(ct);
+
+            await using Microsoft.Data.SqlClient.SqlDataReader rdr = await cmd.ExecuteReaderAsync(ct);
+            System.Collections.Generic.List<T> list =
+                new System.Collections.Generic.List<T>()
+            ;
+
+            while (await rdr.ReadAsync(ct))
+                list.Add(map(rdr));
+
+            return list;
+        }
+        finally
+        {
+            this.m_lock.Release();
+        }
+
     }
 
-    private static T? Val<T>(
-        Microsoft.Data.SqlClient.SqlDataReader r, 
-        string col
-    )
+    private static T? Val<T>(Microsoft.Data.SqlClient.SqlDataReader r, string col)
     {
         object v = r[col];
-        return v == System.DBNull.Value ? default 
-            : (T)System.Convert.ChangeType(v, typeof(T))
-        ;
+
+        if (v == System.DBNull.Value)
+            return default;
+
+        System.Type targetType = System.Nullable.GetUnderlyingType(typeof(T))
+                          ?? typeof(T);
+
+        return (T)System.Convert.ChangeType(v, targetType);
     }
 
     // ── Connection info ──────────────────────────────────────────────────────
@@ -73,15 +94,19 @@ public sealed class MsSqlProvider
         """;
 
         System.Collections.Generic.IEnumerable<DatabaseInfo> results =
-            await QueryAsync(sql, r => new DatabaseInfo(
-                r["Name"].ToString()!,
-                r["Version"].ToString()!.Split('\n')[0],
-                null,
-                r["Collation"]?.ToString(),
-                Val<long?>(r, "SizeKb"),
-                Val<System.DateTime?>(r, "CreateDate")),
+            await QueryAsync(sql, 
+                delegate(Microsoft.Data.SqlClient.SqlDataReader r) 
+                {
+                    return new DatabaseInfo(
+                    r["Name"].ToString()!,
+                    r["Version"].ToString()!.Split('\n')[0],
+                    null,
+                    r["Collation"]?.ToString(),
+                    Val<long?>(r, "SizeKb"),
+                    Val<System.DateTime?>(r, "CreateDate"));
+                },
                 ct: ct
-            );
+        );
 
         // Manual implementation of First()
         foreach (DatabaseInfo item in results)
@@ -117,7 +142,7 @@ public sealed class MsSqlProvider
             SELECT
                 s.name                        AS SchemaName,
                 t.name                        AS TableName,
-                p.rows                        AS RowCount,
+                p.rows                        AS "RowCount",
                 'BASE TABLE'                  AS TableType,
                 t.create_date                 AS CreateDate,
                 t.modify_date                 AS ModifyDate,
@@ -132,14 +157,14 @@ public sealed class MsSqlProvider
             ORDER BY s.name, t.name
             """,
             r => new TableInfo(
-                r["SchemaName"].ToString()!, 
+                r["SchemaName"].ToString()!,
                 r["TableName"].ToString()!,
                 Val<long>(r, "RowCount"), "BASE TABLE",
-                Val<System.DateTime?>(r, "CreateDate"), 
+                Val<System.DateTime?>(r, "CreateDate"),
                 Val<System.DateTime?>(r, "ModifyDate"),
                 Val<long?>(r, "SizeKb")
                 ),
-            cmd => cmd.Parameters.AddWithValue("@schema", (object?)schema ?? 
+            cmd => cmd.Parameters.AddWithValue("@schema", (object?)schema ??
                 System.DBNull.Value
                 ), ct
             );
@@ -161,12 +186,12 @@ public sealed class MsSqlProvider
             ORDER BY s.name, v.name
             """,
             r => new TableInfo(
-                r["SchemaName"].ToString()!, 
+                r["SchemaName"].ToString()!,
                 r["ViewName"].ToString()!,
-                0, "VIEW", 
-                Val<System.DateTime?>(r, "CreateDate"), 
+                0, "VIEW",
+                Val<System.DateTime?>(r, "CreateDate"),
                 Val<System.DateTime?>(r, "ModifyDate"), null),
-            cmd => cmd.Parameters.AddWithValue("@schema", 
+            cmd => cmd.Parameters.AddWithValue("@schema",
                 (object?)schema ?? System.DBNull.Value)
                 , ct
             );
@@ -176,7 +201,7 @@ public sealed class MsSqlProvider
     public System.Threading.Tasks.Task<
         System.Collections.Generic.List<ColumnInfo>
         > GetColumnsAsync(
-        string schema, 
+        string schema,
         string table,
         System.Threading.CancellationToken ct = default
     ) =>
@@ -230,7 +255,8 @@ public sealed class MsSqlProvider
                 System.Convert.ToInt32(r["IsIdentity"]) == 1,
                 r["COLUMN_DEFAULT"]?.ToString(),
                 r["Description"]?.ToString()),
-            cmd => {
+            cmd =>
+            {
                 cmd.Parameters.AddWithValue("@schema", schema);
                 cmd.Parameters.AddWithValue("@table", table);
             }, ct);
@@ -240,7 +266,7 @@ public sealed class MsSqlProvider
     public System.Threading.Tasks.Task<
         System.Collections.Generic.List<IndexInfo>
         > GetIndexesAsync(
-        string? schema = null, 
+        string? schema = null,
         string? table = null,
         System.Threading.CancellationToken ct = default
     ) =>
@@ -277,21 +303,22 @@ public sealed class MsSqlProvider
                 (bool)r["IsDisabled"],
                 System.Linq.Enumerable.ToList(
                 (r["Columns"]?.ToString() ?? "")
-                .Split(',', 
-                    System.StringSplitOptions.RemoveEmptyEntries 
+                .Split(',',
+                    System.StringSplitOptions.RemoveEmptyEntries
                     | System.StringSplitOptions.TrimEntries
                 )),
                 System.Linq.Enumerable.ToList(
                 (r["IncludedColumns"]?.ToString() ?? "")
-                .Split(',', System.StringSplitOptions.RemoveEmptyEntries 
+                .Split(',', System.StringSplitOptions.RemoveEmptyEntries
                     | System.StringSplitOptions.TrimEntries
                 ))),
-            cmd => {
-                cmd.Parameters.AddWithValue("@schema", (object?)schema ?? 
+            cmd =>
+            {
+                cmd.Parameters.AddWithValue("@schema", (object?)schema ??
                     System.DBNull.Value
                 );
 
-                cmd.Parameters.AddWithValue("@table",  (object?)table  ?? 
+                cmd.Parameters.AddWithValue("@table", (object?)table ??
                     System.DBNull.Value
                 );
             }, ct);
@@ -301,7 +328,7 @@ public sealed class MsSqlProvider
     public System.Threading.Tasks.Task<
         System.Collections.Generic.List<ForeignKeyInfo>
         > GetForeignKeysAsync(
-        string? schema = null, 
+        string? schema = null,
         string? table = null,
         System.Threading.CancellationToken ct = default
     ) =>
@@ -338,22 +365,23 @@ public sealed class MsSqlProvider
                 r["TableName"].ToString()!,
                 System.Linq.Enumerable.ToList(
                 (r["Columns"]?.ToString() ?? "")
-                .Split(',', System.StringSplitOptions.RemoveEmptyEntries 
+                .Split(',', System.StringSplitOptions.RemoveEmptyEntries
                     | System.StringSplitOptions.TrimEntries)),
                 r["RefSchema"].ToString()!,
                 r["RefTable"].ToString()!,
                 System.Linq.Enumerable.ToList(
                 (r["RefColumns"]?.ToString() ?? "")
-                .Split(',', System.StringSplitOptions.RemoveEmptyEntries 
+                .Split(',', System.StringSplitOptions.RemoveEmptyEntries
                     | System.StringSplitOptions.TrimEntries)),
                 r["OnDelete"].ToString()!,
                 r["OnUpdate"].ToString()!),
-            cmd => {
-                cmd.Parameters.AddWithValue("@schema", (object?)schema ?? 
+            cmd =>
+            {
+                cmd.Parameters.AddWithValue("@schema", (object?)schema ??
                     System.DBNull.Value
                 );
 
-                cmd.Parameters.AddWithValue("@table",  (object?)table  ?? 
+                cmd.Parameters.AddWithValue("@table", (object?)table ??
                     System.DBNull.Value
                 );
             }, ct);
@@ -375,14 +403,14 @@ public sealed class MsSqlProvider
             ORDER BY s.name, p.name
             """,
             r => new ProcedureInfo(
-                r["SchemaName"].ToString()!, 
+                r["SchemaName"].ToString()!,
                 r["ProcName"].ToString()!,
-                "PROCEDURE", 
-                "", 
-                Val<System.DateTime?>(r, "CreateDate"), 
+                "PROCEDURE",
+                "",
+                Val<System.DateTime?>(r, "CreateDate"),
                 Val<System.DateTime?>(r, "ModifyDate"), null),
             cmd => cmd.Parameters.AddWithValue(
-                "@schema", 
+                "@schema",
                 (object?)schema ??
                 System.DBNull.Value
             )
@@ -420,11 +448,11 @@ public sealed class MsSqlProvider
             ORDER BY s.name, o.name
             """,
             r => new ProcedureInfo(
-                r["SchemaName"].ToString()!, 
+                r["SchemaName"].ToString()!,
                 r["FuncName"].ToString()!,
-                "FUNCTION", 
+                "FUNCTION",
                 r["FuncType"].ToString()!,
-                Val<System.DateTime?>(r, "CreateDate"), 
+                Val<System.DateTime?>(r, "CreateDate"),
                 Val<System.DateTime?>(r, "ModifyDate"), null),
             cmd => cmd.Parameters.AddWithValue(
                 "@schema", (object?)schema ?? System.DBNull.Value)
@@ -436,7 +464,7 @@ public sealed class MsSqlProvider
     public System.Threading.Tasks.Task<
         System.Collections.Generic.List<ProcedureParameter>
     > GetProcedureParametersAsync(
-        string schema, 
+        string schema,
         string name,
         System.Threading.CancellationToken ct = default
     ) =>
@@ -463,10 +491,10 @@ public sealed class MsSqlProvider
 
     // ── Object Definition ────────────────────────────────────────────────────
 
-    public async System.Threading.Tasks.Task<string?> 
+    public async System.Threading.Tasks.Task<string?>
         GetObjectDefinitionAsync(
-        string schema, 
-        string name, 
+        string schema,
+        string name,
         string objectType,
         System.Threading.CancellationToken ct = default
     )
@@ -483,7 +511,7 @@ public sealed class MsSqlProvider
     public System.Threading.Tasks.Task<
         System.Collections.Generic.List<TriggerInfo>
         > GetTriggersAsync(
-        string? schema = null, 
+        string? schema = null,
         string? table = null,
         System.Threading.CancellationToken ct = default
     ) =>
@@ -512,16 +540,17 @@ public sealed class MsSqlProvider
                 r["Timing"].ToString()!,
                 !(bool)r["IsDisabled"],
                 r["Definition"]?.ToString()),
-            cmd => {
+            cmd =>
+            {
                 cmd.Parameters.AddWithValue(
-                    "@schema", 
-                    (object?)schema ?? 
+                    "@schema",
+                    (object?)schema ??
                     System.DBNull.Value
                 );
 
                 cmd.Parameters.AddWithValue(
-                    "@table",  
-                    (object?)table  ?? System.DBNull.Value
+                    "@table",
+                    (object?)table ?? System.DBNull.Value
                 );
             }
             , ct
@@ -620,7 +649,7 @@ public sealed class MsSqlProvider
         System.Threading.CancellationToken ct = default
     )
     {
-        System.Diagnostics.Stopwatch sw = 
+        System.Diagnostics.Stopwatch sw =
             System.Diagnostics.Stopwatch.StartNew();
         try
         {
@@ -647,7 +676,7 @@ public sealed class MsSqlProvider
                 int count = 0;
                 while (await rdr.ReadAsync(ct) && count < request.MaxRows)
                 {
-                    System.Collections.Generic.List<object?> row = 
+                    System.Collections.Generic.List<object?> row =
                         new System.Collections.Generic.List<object?>();
                     for (int i = 0; i < rdr.FieldCount; i++)
                         row.Add(rdr.IsDBNull(i) ? null : rdr.GetValue(i));
@@ -663,11 +692,11 @@ public sealed class MsSqlProvider
         {
             sw.Stop();
             return new QueryResult(
-                false, 
-                [], 
-                [], 
-                0, 
-                sw.ElapsedMilliseconds, 
+                false,
+                [],
+                [],
+                0,
+                sw.ElapsedMilliseconds,
                 ex.Message
             );
         }
@@ -676,8 +705,8 @@ public sealed class MsSqlProvider
     // ── DDL helpers ──────────────────────────────────────────────────────────
 
     public async System.Threading.Tasks.Task<DdlResult> GetCreateScriptAsync(
-        string schema, 
-        string name, 
+        string schema,
+        string name,
         string objectType,
         System.Threading.CancellationToken ct = default
     )
@@ -689,8 +718,8 @@ public sealed class MsSqlProvider
     }
 
     public async System.Threading.Tasks.Task<DdlResult> TruncateTableAsync(
-        string schema, 
-        string table, 
+        string schema,
+        string table,
         System.Threading.CancellationToken ct = default
     )
     {
@@ -701,27 +730,27 @@ public sealed class MsSqlProvider
             await cmd.ExecuteNonQueryAsync(ct);
             return new DdlResult(true, null, null);
         }
-        catch (System.Exception ex) 
-        { 
-            return new DdlResult(false, ex.Message, null); 
+        catch (System.Exception ex)
+        {
+            return new DdlResult(false, ex.Message, null);
         }
     }
 
     public async System.Threading.Tasks.Task<DdlResult> DropObjectAsync(
-        string schema, 
-        string name, 
-        string objectType, 
+        string schema,
+        string name,
+        string objectType,
         System.Threading.CancellationToken ct = default
     )
     {
         var ddl = objectType.ToUpperInvariant() switch
         {
-            "TABLE"     => $"DROP TABLE IF EXISTS [{schema}].[{name}]",
-            "VIEW"      => $"DROP VIEW IF EXISTS [{schema}].[{name}]",
+            "TABLE" => $"DROP TABLE IF EXISTS [{schema}].[{name}]",
+            "VIEW" => $"DROP VIEW IF EXISTS [{schema}].[{name}]",
             "PROCEDURE" => $"DROP PROCEDURE IF EXISTS [{schema}].[{name}]",
-            "FUNCTION"  => $"DROP FUNCTION IF EXISTS [{schema}].[{name}]",
-            "TRIGGER"   => $"DROP TRIGGER IF EXISTS [{schema}].[{name}]",
-            "SEQUENCE"  => $"DROP SEQUENCE IF EXISTS [{schema}].[{name}]",
+            "FUNCTION" => $"DROP FUNCTION IF EXISTS [{schema}].[{name}]",
+            "TRIGGER" => $"DROP TRIGGER IF EXISTS [{schema}].[{name}]",
+            "SEQUENCE" => $"DROP SEQUENCE IF EXISTS [{schema}].[{name}]",
             _ => throw new System.ArgumentException($"Unsupported object type: {objectType}")
         };
         try
@@ -731,9 +760,9 @@ public sealed class MsSqlProvider
             await cmd.ExecuteNonQueryAsync(ct);
             return new DdlResult(true, null, ddl);
         }
-        catch (System.Exception ex) 
-        { 
-            return new DdlResult(false, ex.Message, ddl); 
+        catch (System.Exception ex)
+        {
+            return new DdlResult(false, ex.Message, ddl);
         }
     }
 
@@ -752,8 +781,8 @@ public sealed class MsSqlProvider
             ORDER BY ds.name
             """,
             r => new TablespaceInfo(
-                r["Name"].ToString()!, 
-                r["Location"]?.ToString(), 
+                r["Name"].ToString()!,
+                r["Location"]?.ToString(),
                 Val<long?>(r, "SizeKb")
                 )
             , ct: ct

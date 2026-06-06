@@ -9,10 +9,11 @@ public sealed class PostgreSqlProvider
 {
     private readonly Npgsql.NpgsqlConnection _conn;
 
-
+    private readonly System.Threading.SemaphoreSlim m_lock;
     public PostgreSqlProvider(string connectionString)
     {
         this._conn = new Npgsql.NpgsqlConnection(connectionString);
+        this.m_lock = new System.Threading.SemaphoreSlim(1, 1);
     }
 
 
@@ -43,52 +44,79 @@ public sealed class PostgreSqlProvider
         System.Threading.CancellationToken ct = default
     )
     {
-        await using Npgsql.NpgsqlCommand cmd = _conn.CreateCommand();
-        cmd.CommandText = sql;
-        cmd.CommandTimeout = 60;
-        configure?.Invoke(cmd);
-        await using Npgsql.NpgsqlDataReader rdr = await cmd.ExecuteReaderAsync(ct);
-        System.Collections.Generic.List<T> list = new System.Collections.Generic.List<T>();
-        while (await rdr.ReadAsync(ct)) list.Add(map(rdr));
-        return list;
+        await this.m_lock.WaitAsync(ct);
+
+        try
+        {
+            await using Npgsql.NpgsqlCommand cmd = _conn.CreateCommand();
+            cmd.CommandText = sql;
+            cmd.CommandTimeout = 60;
+            configure?.Invoke(cmd);
+
+            if (_conn.State != System.Data.ConnectionState.Open)
+                await _conn.OpenAsync(ct);
+
+            await using Npgsql.NpgsqlDataReader rdr =
+                await cmd.ExecuteReaderAsync(ct);
+
+            System.Collections.Generic.List<T> list = new System.Collections.Generic.List<T>();
+
+            while (await rdr.ReadAsync(ct))
+                list.Add(map(rdr));
+
+            return list;
+        }
+        finally
+        {
+            this.m_lock.Release();
+        }
+
     }
 
-    private static T? Val<T>(
-        Npgsql.NpgsqlDataReader r, 
-        string col
-    )
+
+    private static T? Val<T>(Npgsql.NpgsqlDataReader r, string col)
     {
         object v = r[col];
-        return v == System.DBNull.Value ? default : 
-            (T)System.Convert.ChangeType(v, typeof(T) )
-        ;
+
+        if (v == System.DBNull.Value)
+            return default;
+
+        System.Type targetType = System.Nullable.GetUnderlyingType(typeof(T))
+                          ?? typeof(T);
+
+        return (T)System.Convert.ChangeType(v, targetType);
     }
+
+
 
     // ── Connection info ──────────────────────────────────────────────────────
     public async System.Threading.Tasks.Task<DatabaseInfo> GetDatabaseInfoAsync(
     System.Threading.CancellationToken ct = default
 )
     {
-        System.Collections.Generic.List<DatabaseInfo> results = 
-            await QueryAsync("""
-        SELECT 
-             current_database() AS name 
-            ,version() AS version 
-            ,pg_encoding_to_char(encoding) AS encoding 
-            ,datcollate AS collation 
-            ,pg_database_size(current_database()) / 1024 AS size_kb 
-            ,NULL::timestamptz AS create_date 
-        FROM pg_database 
-        WHERE datname = current_database() 
-        """,
-            r => new DatabaseInfo(
-                r["name"].ToString()!,
-                r["version"].ToString()!,
-                r["encoding"]?.ToString(),
-                r["collation"]?.ToString(),
-                Val<long?>(r, "size_kb"),
-                null
-            ), 
+        System.Collections.Generic.List<DatabaseInfo> results =
+        await QueryAsync("""
+            SELECT 
+                 current_database() AS name 
+                ,version() AS version 
+                ,pg_encoding_to_char(encoding) AS encoding 
+                ,datcollate AS collation 
+                ,pg_database_size(current_database()) / 1024 AS size_kb 
+                ,NULL::timestamptz AS create_date 
+            FROM pg_database 
+            WHERE datname = current_database() 
+            """,
+            delegate (Npgsql.NpgsqlDataReader r) 
+            {
+                return new DatabaseInfo(
+                    r["name"].ToString()!,
+                    r["version"].ToString()!,
+                    r["encoding"]?.ToString(),
+                    r["collation"]?.ToString(),
+                    Val<long?>(r, "size_kb"),
+                    null
+                );
+            },
             ct: ct
         );
 
@@ -97,6 +125,8 @@ public sealed class PostgreSqlProvider
         {
             return item;
         }
+
+
 
         throw new System.InvalidOperationException("Sequence contains no elements.");
     }

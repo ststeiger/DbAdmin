@@ -1,13 +1,10 @@
 
 namespace DbAdmin;
 
-using Microsoft.AspNetCore.Http;
-using Microsoft.Extensions.Hosting;
-using Microsoft.AspNetCore.Builder;
-using Microsoft.Extensions.DependencyInjection;
 
-using DbAdmin.Endpoints;
-using DbAdmin.Services;
+using Microsoft.AspNetCore.Builder; // for Use*
+using Microsoft.Extensions.DependencyInjection; // for Add*, 
+using Microsoft.AspNetCore.Hosting; // for ConfigureKestrel
 
 
 public class Program
@@ -22,9 +19,21 @@ public class Program
             Microsoft.AspNetCore.Builder.WebApplication.CreateBuilder(args)
         ;
 
+        /*
+        builder.WebHost.ConfigureKestrel(options =>
+        {
+            options.ListenAnyIP(5000, listenOptions =>
+            {
+                listenOptions.UseConnectionLogging(); // optional
+            });
+        });
+        */
+
+
+
         // ── Services ──────────────────────────────────────────────────────────────────
 
-        builder.Services.AddSingleton<ConnectionSessionService>();
+        builder.Services.AddSingleton<Services.ConnectionSessionService>();
 
         builder.Services.AddEndpointsApiExplorer();
         builder.Services.AddSwaggerGen(c =>
@@ -81,20 +90,24 @@ public class Program
 
         app.UseCors();
 
-        if (app.Environment.IsDevelopment())
+        if(Microsoft.Extensions.Hosting.HostEnvironmentEnvExtensions.IsDevelopment(app.Environment))
         {
             app.UseSwagger();
             app.UseSwaggerUI(c =>
             {
                 c.SwaggerEndpoint("/swagger/v1/swagger.json", "DbAdmin v1");
-                c.RoutePrefix = string.Empty;   // Swagger at root
+                // c.RoutePrefix = string.Empty;   // Swagger at root
+                c.RoutePrefix = "swagger";
             });
         }
 
         // ── Global error handler ──────────────────────────────────────────────────────
 
         app.Use(
-            async (ctx, next) =>
+            async delegate (
+                Microsoft.AspNetCore.Http.HttpContext ctx,
+                Microsoft.AspNetCore.Http.RequestDelegate next
+            )
             {
                 try
                 {
@@ -103,18 +116,27 @@ public class Program
                 catch (System.Exception ex)
                 {
                     ctx.Response.StatusCode = 500;
-                    await ctx.Response.WriteAsJsonAsync(
-                        new { error = ex.Message }
+                    await Microsoft.AspNetCore.Http.HttpResponseJsonExtensions.WriteAsJsonAsync(
+                        ctx.Response,
+                        new Models.ErrorResponse(ex.Message)
                     );
                 }
             }
         );
 
         // ── Map all endpoints ─────────────────────────────────────────────────────────
-
+        app.UseDefaultFiles(new Microsoft.AspNetCore.Builder.DefaultFilesOptions()
+        {
+            DefaultFileNames =
+            {
+                "index.htm"
+            }
+        });
 
         app.UseStaticFiles();
-        app.MapAll();
+
+        app.UseStaticFiles();
+        Endpoints.ApiEndpoints.MapAll(app);
 
         await app.RunAsync();
 

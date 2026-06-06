@@ -1,6 +1,12 @@
 
 namespace DbAdmin.Models;
 
+// global 
+public record ErrorResponse(
+    [property: System.Text.Json.Serialization.JsonPropertyName("error")] string Error
+);
+
+
 
 // ─── Connection ───────────────────────────────────────────────────────────────
 
