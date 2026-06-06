@@ -2,9 +2,6 @@
 namespace DbAdmin.Providers;
 
 
-using DbAdmin.Models;
-
-
 public sealed class MsSqlProvider
     : IDbProvider
 {
@@ -18,7 +15,7 @@ public sealed class MsSqlProvider
     }
 
 
-    public DbProvider ProviderType => DbProvider.MsSql;
+    public Models.DbProvider ProviderType => Models.DbProvider.MsSql;
 
     public async System.Threading.Tasks.Task OpenAsync(System.Threading.CancellationToken ct = default)
         => await _conn.OpenAsync(ct);
@@ -78,7 +75,7 @@ public sealed class MsSqlProvider
 
     // ── Connection info ──────────────────────────────────────────────────────
 
-    public async System.Threading.Tasks.Task<DatabaseInfo> GetDatabaseInfoAsync(
+    public async System.Threading.Tasks.Task<Models.DatabaseInfo> GetDatabaseInfoAsync(
         System.Threading.CancellationToken ct = default
     )
     {
@@ -93,11 +90,11 @@ public sealed class MsSqlProvider
         WHERE name = DB_NAME()
         """;
 
-        System.Collections.Generic.IEnumerable<DatabaseInfo> results =
+        System.Collections.Generic.IEnumerable<Models.DatabaseInfo> results =
             await QueryAsync(sql, 
                 delegate(Microsoft.Data.SqlClient.SqlDataReader r) 
                 {
-                    return new DatabaseInfo(
+                    return new Models.DatabaseInfo(
                     r["Name"].ToString()!,
                     r["Version"].ToString()!.Split('\n')[0],
                     null,
@@ -109,7 +106,7 @@ public sealed class MsSqlProvider
         );
 
         // Manual implementation of First()
-        foreach (DatabaseInfo item in results)
+        foreach (Models.DatabaseInfo item in results)
             return item;
 
         throw new System.InvalidOperationException("Sequence contains no elements.");
@@ -118,7 +115,7 @@ public sealed class MsSqlProvider
     // ── Schemas ──────────────────────────────────────────────────────────────
 
     public System.Threading.Tasks.Task<
-        System.Collections.Generic.List<SchemaInfo>
+        System.Collections.Generic.List<Models.SchemaInfo>
     > GetSchemasAsync(
         System.Threading.CancellationToken ct = default
     ) =>
@@ -128,12 +125,12 @@ public sealed class MsSqlProvider
             LEFT JOIN sys.database_principals p ON s.principal_id = p.principal_id
             ORDER BY s.name
             """,
-            r => new SchemaInfo(r["name"].ToString()!, r["Owner"]?.ToString(), null), ct: ct);
+            r => new Models.SchemaInfo(r["name"].ToString()!, r["Owner"]?.ToString(), null), ct: ct);
 
     // ── Tables ───────────────────────────────────────────────────────────────
 
     public System.Threading.Tasks.Task<
-        System.Collections.Generic.List<TableInfo>
+        System.Collections.Generic.List<Models.TableInfo>
     > GetTablesAsync(
         string? schema = null,
         System.Threading.CancellationToken ct = default
@@ -156,7 +153,7 @@ public sealed class MsSqlProvider
             GROUP BY s.name, t.name, p.rows, t.create_date, t.modify_date
             ORDER BY s.name, t.name
             """,
-            r => new TableInfo(
+            r => new Models.TableInfo(
                 r["SchemaName"].ToString()!,
                 r["TableName"].ToString()!,
                 Val<long>(r, "RowCount"), "BASE TABLE",
@@ -172,7 +169,7 @@ public sealed class MsSqlProvider
     // ── Views ────────────────────────────────────────────────────────────────
 
     public System.Threading.Tasks.Task<
-        System.Collections.Generic.List<TableInfo>
+        System.Collections.Generic.List<Models.TableInfo>
         > GetViewsAsync(
         string? schema = null,
         System.Threading.CancellationToken ct = default
@@ -185,7 +182,7 @@ public sealed class MsSqlProvider
             WHERE (@schema IS NULL OR s.name = @schema)
             ORDER BY s.name, v.name
             """,
-            r => new TableInfo(
+            r => new Models.TableInfo(
                 r["SchemaName"].ToString()!,
                 r["ViewName"].ToString()!,
                 0, "VIEW",
@@ -199,7 +196,7 @@ public sealed class MsSqlProvider
     // ── Columns ──────────────────────────────────────────────────────────────
 
     public System.Threading.Tasks.Task<
-        System.Collections.Generic.List<ColumnInfo>
+        System.Collections.Generic.List<Models.ColumnInfo>
         > GetColumnsAsync(
         string schema,
         string table,
@@ -242,7 +239,7 @@ public sealed class MsSqlProvider
             WHERE c.TABLE_SCHEMA = @schema AND c.TABLE_NAME = @table
             ORDER BY c.ORDINAL_POSITION
             """,
-            r => new ColumnInfo(
+            r => new Models.ColumnInfo(
                 r["COLUMN_NAME"].ToString()!,
                 (int)r["ORDINAL_POSITION"],
                 r["DATA_TYPE"].ToString()!,
@@ -264,7 +261,7 @@ public sealed class MsSqlProvider
     // ── Indexes ──────────────────────────────────────────────────────────────
 
     public System.Threading.Tasks.Task<
-        System.Collections.Generic.List<IndexInfo>
+        System.Collections.Generic.List<Models.IndexInfo>
         > GetIndexesAsync(
         string? schema = null,
         string? table = null,
@@ -293,7 +290,7 @@ public sealed class MsSqlProvider
             GROUP BY i.name, s.name, t.name, i.type_desc, i.is_unique, i.is_primary_key, i.is_disabled 
             ORDER BY s.name, t.name, i.name 
             """,
-            r => new IndexInfo(
+            r => new Models.IndexInfo(
                 r["IndexName"].ToString()!,
                 r["SchemaName"].ToString()!,
                 r["TableName"].ToString()!,
@@ -326,7 +323,7 @@ public sealed class MsSqlProvider
     // ── Foreign Keys ─────────────────────────────────────────────────────────
 
     public System.Threading.Tasks.Task<
-        System.Collections.Generic.List<ForeignKeyInfo>
+        System.Collections.Generic.List<Models.ForeignKeyInfo>
         > GetForeignKeysAsync(
         string? schema = null,
         string? table = null,
@@ -359,7 +356,7 @@ public sealed class MsSqlProvider
                      fk.delete_referential_action_desc, fk.update_referential_action_desc
             ORDER BY s.name, tp.name, fk.name
             """,
-            r => new ForeignKeyInfo(
+            r => new Models.ForeignKeyInfo(
                 r["FkName"].ToString()!,
                 r["SchemaName"].ToString()!,
                 r["TableName"].ToString()!,
@@ -389,7 +386,7 @@ public sealed class MsSqlProvider
     // ── Procedures ───────────────────────────────────────────────────────────
 
     public System.Threading.Tasks.Task<
-        System.Collections.Generic.List<ProcedureInfo>
+        System.Collections.Generic.List<Models.ProcedureInfo>
     > GetProceduresAsync(
         string? schema = null,
         System.Threading.CancellationToken ct = default
@@ -402,7 +399,7 @@ public sealed class MsSqlProvider
             WHERE (@schema IS NULL OR s.name = @schema)
             ORDER BY s.name, p.name
             """,
-            r => new ProcedureInfo(
+            r => new Models.ProcedureInfo(
                 r["SchemaName"].ToString()!,
                 r["ProcName"].ToString()!,
                 "PROCEDURE",
@@ -420,7 +417,7 @@ public sealed class MsSqlProvider
     // ── Functions (scalar + table-valued) ────────────────────────────────────
 
     public System.Threading.Tasks.Task<
-        System.Collections.Generic.List<ProcedureInfo>
+        System.Collections.Generic.List<Models.ProcedureInfo>
     > GetFunctionsAsync(
         string? schema = null,
         System.Threading.CancellationToken ct = default
@@ -447,7 +444,7 @@ public sealed class MsSqlProvider
               AND (@schema IS NULL OR s.name = @schema)
             ORDER BY s.name, o.name
             """,
-            r => new ProcedureInfo(
+            r => new Models.ProcedureInfo(
                 r["SchemaName"].ToString()!,
                 r["FuncName"].ToString()!,
                 "FUNCTION",
@@ -462,7 +459,7 @@ public sealed class MsSqlProvider
     // ── Parameters ───────────────────────────────────────────────────────────
 
     public System.Threading.Tasks.Task<
-        System.Collections.Generic.List<ProcedureParameter>
+        System.Collections.Generic.List<Models.ProcedureParameter>
     > GetProcedureParametersAsync(
         string schema,
         string name,
@@ -481,7 +478,7 @@ public sealed class MsSqlProvider
             WHERE p.object_id = OBJECT_ID(@fullName)
             ORDER BY p.parameter_id
             """,
-            r => new ProcedureParameter(
+            r => new Models.ProcedureParameter(
                 r["ParamName"].ToString()!,
                 (int)r["OrdinalPos"],
                 (bool)r["IsOutput"] ? "OUT" : "IN",
@@ -509,7 +506,7 @@ public sealed class MsSqlProvider
     // ── Triggers ─────────────────────────────────────────────────────────────
 
     public System.Threading.Tasks.Task<
-        System.Collections.Generic.List<TriggerInfo>
+        System.Collections.Generic.List<Models.TriggerInfo>
         > GetTriggersAsync(
         string? schema = null,
         string? table = null,
@@ -532,7 +529,7 @@ public sealed class MsSqlProvider
               AND (@table  IS NULL OR t.name = @table)
             ORDER BY s.name, t.name, tr.name
             """,
-            r => new TriggerInfo(
+            r => new Models.TriggerInfo(
                 r["TriggerName"].ToString()!,
                 r["SchemaName"].ToString()!,
                 r["TableName"].ToString()!,
@@ -559,7 +556,7 @@ public sealed class MsSqlProvider
     // ── Sequences ────────────────────────────────────────────────────────────
 
     public System.Threading.Tasks.Task<
-        System.Collections.Generic.List<SequenceInfo>
+        System.Collections.Generic.List<Models.SequenceInfo>
         > GetSequencesAsync(
         string? schema = null,
         System.Threading.CancellationToken ct = default
@@ -582,7 +579,7 @@ public sealed class MsSqlProvider
             WHERE (@schema IS NULL OR s.name = @schema)
             ORDER BY s.name, seq.name
             """,
-            r => new SequenceInfo(
+            r => new Models.SequenceInfo(
                 r["SchemaName"].ToString()!,
                 r["SeqName"].ToString()!,
                 r["DataType"].ToString()!,
@@ -597,8 +594,8 @@ public sealed class MsSqlProvider
 
     // ── Table Data ───────────────────────────────────────────────────────────
 
-    public async System.Threading.Tasks.Task<TableDataResult> GetTableDataAsync(
-        TableDataRequest req,
+    public async System.Threading.Tasks.Task<Models.TableDataResult> GetTableDataAsync(
+        Models.TableDataRequest req,
         System.Threading.CancellationToken ct = default
     )
     {
@@ -639,13 +636,13 @@ public sealed class MsSqlProvider
                 row.Add(rdr.IsDBNull(i) ? null : rdr.GetValue(i));
             rows.Add(row);
         }
-        return new TableDataResult(cols, rows, total, req.Page, req.PageSize);
+        return new Models.TableDataResult(cols, rows, total, req.Page, req.PageSize);
     }
 
     // ── Query Execution ──────────────────────────────────────────────────────
 
-    public async System.Threading.Tasks.Task<QueryResult> ExecuteQueryAsync(
-        QueryRequest request,
+    public async System.Threading.Tasks.Task<Models.QueryResult> ExecuteQueryAsync(
+        Models.QueryRequest request,
         System.Threading.CancellationToken ct = default
     )
     {
@@ -686,12 +683,12 @@ public sealed class MsSqlProvider
             }
             affected = rdr.RecordsAffected;
             sw.Stop();
-            return new QueryResult(true, cols, rows, affected, sw.ElapsedMilliseconds, null);
+            return new Models.QueryResult(true, cols, rows, affected, sw.ElapsedMilliseconds, null);
         }
         catch (System.Exception ex)
         {
             sw.Stop();
-            return new QueryResult(
+            return new Models.QueryResult(
                 false,
                 [],
                 [],
@@ -704,7 +701,7 @@ public sealed class MsSqlProvider
 
     // ── DDL helpers ──────────────────────────────────────────────────────────
 
-    public async System.Threading.Tasks.Task<DdlResult> GetCreateScriptAsync(
+    public async System.Threading.Tasks.Task<Models.DdlResult> GetCreateScriptAsync(
         string schema,
         string name,
         string objectType,
@@ -713,11 +710,11 @@ public sealed class MsSqlProvider
     {
         var def = await GetObjectDefinitionAsync(schema, name, objectType, ct);
         return def is null
-            ? new DdlResult(false, "Could not retrieve definition.", null)
-            : new DdlResult(true, null, def);
+            ? new Models.DdlResult(false, "Could not retrieve definition.", null)
+            : new Models.DdlResult(true, null, def);
     }
 
-    public async System.Threading.Tasks.Task<DdlResult> TruncateTableAsync(
+    public async System.Threading.Tasks.Task<Models.DdlResult> TruncateTableAsync(
         string schema,
         string table,
         System.Threading.CancellationToken ct = default
@@ -728,15 +725,15 @@ public sealed class MsSqlProvider
             await using var cmd = _conn.CreateCommand();
             cmd.CommandText = $"TRUNCATE TABLE [{schema}].[{table}]";
             await cmd.ExecuteNonQueryAsync(ct);
-            return new DdlResult(true, null, null);
+            return new Models.DdlResult(true, null, null);
         }
         catch (System.Exception ex)
         {
-            return new DdlResult(false, ex.Message, null);
+            return new Models.DdlResult(false, ex.Message, null);
         }
     }
 
-    public async System.Threading.Tasks.Task<DdlResult> DropObjectAsync(
+    public async System.Threading.Tasks.Task<Models.DdlResult> DropObjectAsync(
         string schema,
         string name,
         string objectType,
@@ -758,16 +755,16 @@ public sealed class MsSqlProvider
             await using Microsoft.Data.SqlClient.SqlCommand cmd = _conn.CreateCommand();
             cmd.CommandText = ddl;
             await cmd.ExecuteNonQueryAsync(ct);
-            return new DdlResult(true, null, ddl);
+            return new Models.DdlResult(true, null, ddl);
         }
         catch (System.Exception ex)
         {
-            return new DdlResult(false, ex.Message, ddl);
+            return new Models.DdlResult(false, ex.Message, ddl);
         }
     }
 
     public System.Threading.Tasks.Task<
-        System.Collections.Generic.List<TablespaceInfo>
+        System.Collections.Generic.List<Models.TablespaceInfo>
         > GetTablespacesAsync(
         System.Threading.CancellationToken ct = default
     ) =>
@@ -780,7 +777,7 @@ public sealed class MsSqlProvider
             LEFT JOIN sys.master_files mf ON mf.database_id = DB_ID() AND mf.data_space_id = ds.data_space_id
             ORDER BY ds.name
             """,
-            r => new TablespaceInfo(
+            r => new Models.TablespaceInfo(
                 r["Name"].ToString()!,
                 r["Location"]?.ToString(),
                 Val<long?>(r, "SizeKb")

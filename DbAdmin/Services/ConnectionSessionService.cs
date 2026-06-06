@@ -1,9 +1,6 @@
 
 namespace DbAdmin.Services;
 
-using DbAdmin.Models;
-using DbAdmin.Providers;
-
 
 /// <summary>
 /// Manages open database connections keyed by a session ID.
@@ -34,17 +31,17 @@ public sealed class ConnectionSessionService
 
     public async System.Threading.Tasks.Task<Models.ConnectionInfo> 
         ConnectAsync(
-        ConnectionRequest req,  System.Threading.CancellationToken ct = default
+        Models.ConnectionRequest req,  System.Threading.CancellationToken ct = default
     )
     {
         try
         {
-            IDbProvider provider = ProviderFactory.Create(req);
+            Providers.IDbProvider provider = Providers.ProviderFactory.Create(req);
             await provider.OpenAsync(ct);
 
             string id = System.Guid.NewGuid().ToString("N");
 
-            ConnectionInfo info = new Models.ConnectionInfo(
+            Models.ConnectionInfo info = new Models.ConnectionInfo(
                 id,
                 req.Provider,
                 req.Host,
@@ -64,7 +61,7 @@ public sealed class ConnectionSessionService
         }
     }
 
-    public IDbProvider GetProvider(string connectionId)
+    public Providers.IDbProvider GetProvider(string connectionId)
     {
         if (!_sessions.TryGetValue(connectionId, out SessionEntry? entry))
             throw new System.Collections.Generic.KeyNotFoundException($"No active session '{connectionId}'. Call /connect first.");
@@ -76,7 +73,7 @@ public sealed class ConnectionSessionService
     public System.Collections.Generic.IEnumerable<Models.ConnectionInfo> 
         ListConnections()
     {
-        System.Collections.Generic.List<ConnectionInfo> list = 
+        System.Collections.Generic.List<Models.ConnectionInfo> list = 
             new System.Collections.Generic.List<Models.ConnectionInfo>();
 
         foreach (SessionEntry entry in _sessions.Values)
@@ -138,12 +135,12 @@ public sealed class ConnectionSessionService
     // ── Inner type ───────────────────────────────────────────────────────────
 
     private sealed class SessionEntry(
-        IDbProvider provider,
+        Providers.IDbProvider provider,
         Models.ConnectionInfo info,
         System.DateTime lastUsed
     )
     {
-        public IDbProvider Provider = provider;
+        public Providers.IDbProvider Provider = provider;
         public Models.ConnectionInfo Info = info;
         public System.DateTime LastUsed = lastUsed;
     }

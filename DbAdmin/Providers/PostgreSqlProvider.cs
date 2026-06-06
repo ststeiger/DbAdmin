@@ -1,8 +1,6 @@
 
 namespace DbAdmin.Providers;
 
-using DbAdmin.Models;
-
 
 public sealed class PostgreSqlProvider 
     : IDbProvider
@@ -17,11 +15,11 @@ public sealed class PostgreSqlProvider
     }
 
 
-    public DbProvider ProviderType
+    public Models.DbProvider ProviderType
     {
         get
         {
-            return DbProvider.PostgreSql;
+            return Models.DbProvider.PostgreSql;
         }
     }
 
@@ -90,11 +88,11 @@ public sealed class PostgreSqlProvider
 
 
     // ── Connection info ──────────────────────────────────────────────────────
-    public async System.Threading.Tasks.Task<DatabaseInfo> GetDatabaseInfoAsync(
+    public async System.Threading.Tasks.Task<Models.DatabaseInfo> GetDatabaseInfoAsync(
     System.Threading.CancellationToken ct = default
 )
     {
-        System.Collections.Generic.List<DatabaseInfo> results =
+        System.Collections.Generic.List<Models.DatabaseInfo> results =
         await QueryAsync("""
             SELECT 
                  current_database() AS name 
@@ -108,7 +106,7 @@ public sealed class PostgreSqlProvider
             """,
             delegate (Npgsql.NpgsqlDataReader r) 
             {
-                return new DatabaseInfo(
+                return new Models.DatabaseInfo(
                     r["name"].ToString()!,
                     r["version"].ToString()!,
                     r["encoding"]?.ToString(),
@@ -121,7 +119,7 @@ public sealed class PostgreSqlProvider
         );
 
         // Manual implementation of First()
-        foreach (DatabaseInfo? item in results)
+        foreach (Models.DatabaseInfo? item in results)
         {
             return item;
         }
@@ -135,7 +133,7 @@ public sealed class PostgreSqlProvider
     // ── Schemas ──────────────────────────────────────────────────────────────
 
     public System.Threading.Tasks.Task<
-        System.Collections.Generic.List<SchemaInfo>
+        System.Collections.Generic.List<Models.SchemaInfo>
     > GetSchemasAsync(
         System.Threading.CancellationToken ct = default
     ) =>
@@ -146,7 +144,7 @@ public sealed class PostgreSqlProvider
             WHERE n.nspname !~ '^pg_' AND n.nspname <> 'information_schema'
             ORDER BY n.nspname
             """,
-            r => new SchemaInfo(
+            r => new Models.SchemaInfo(
                 r["name"].ToString()!, 
                 r["owner"]?.ToString(), 
                 r["description"]?.ToString()
@@ -157,7 +155,7 @@ public sealed class PostgreSqlProvider
     // ── Tables ───────────────────────────────────────────────────────────────
 
     public System.Threading.Tasks.Task<
-        System.Collections.Generic.List<TableInfo>
+        System.Collections.Generic.List<Models.TableInfo>
         > GetTablesAsync(
         string? schema = null,
         System.Threading.CancellationToken ct = default
@@ -175,14 +173,14 @@ public sealed class PostgreSqlProvider
               AND ($1::text IS NULL OR n.nspname = $1)
             ORDER BY n.nspname, c.relname
             """,
-            r => new TableInfo(r["schema_name"].ToString()!, r["table_name"].ToString()!,
+            r => new Models.TableInfo(r["schema_name"].ToString()!, r["table_name"].ToString()!,
                 Val<long>(r, "row_count"), "BASE TABLE", null, null, Val<long?>(r, "size_kb")),
             cmd => cmd.Parameters.AddWithValue(schema as object ?? System.DBNull.Value), ct);
 
     // ── Views ────────────────────────────────────────────────────────────────
 
     public System.Threading.Tasks.Task<
-        System.Collections.Generic.List<TableInfo>> GetViewsAsync(
+        System.Collections.Generic.List<Models.TableInfo>> GetViewsAsync(
         string? schema = null,
         System.Threading.CancellationToken ct = default
     ) =>
@@ -198,7 +196,7 @@ public sealed class PostgreSqlProvider
             AND ($1::text IS NULL OR n.nspname = $1) 
             ORDER BY n.nspname, c.relname 
             """,
-            r => new TableInfo(r["schema_name"].ToString()!, r["view_name"].ToString()!,
+            r => new Models.TableInfo(r["schema_name"].ToString()!, r["view_name"].ToString()!,
                 0, r["kind"].ToString() == "m" ? "MATERIALIZED VIEW" : "VIEW", null, null, null),
             cmd => cmd.Parameters.AddWithValue(schema as object ?? 
                 System.DBNull.Value
@@ -207,7 +205,7 @@ public sealed class PostgreSqlProvider
     // ── Columns ──────────────────────────────────────────────────────────────
 
     public System.Threading.Tasks.Task<
-        System.Collections.Generic.List<ColumnInfo>> GetColumnsAsync(
+        System.Collections.Generic.List<Models.ColumnInfo>> GetColumnsAsync(
         string schema, 
         string table,
         System.Threading.CancellationToken ct = default
@@ -241,7 +239,7 @@ public sealed class PostgreSqlProvider
             WHERE c.relname = $1 AND n.nspname = $2 AND a.attnum > 0 AND NOT a.attisdropped
             ORDER BY a.attnum
             """,
-            r => new ColumnInfo(
+            r => new Models.ColumnInfo(
                 r["column_name"].ToString()!,
                 (int)r["ordinal_position"],
                 r["data_type"].ToString()!,
@@ -260,7 +258,7 @@ public sealed class PostgreSqlProvider
     // ── Indexes ──────────────────────────────────────────────────────────────
 
     public System.Threading.Tasks.Task<
-        System.Collections.Generic.List<IndexInfo>
+        System.Collections.Generic.List<Models.IndexInfo>
         > GetIndexesAsync(
         string? schema = null, 
         string? table = null,
@@ -286,7 +284,7 @@ public sealed class PostgreSqlProvider
               AND ($2::text IS NULL OR t.relname  = $2)
             ORDER BY n.nspname, t.relname, i.relname
             """,
-            r => new IndexInfo(
+            r => new Models.IndexInfo(
                 r["index_name"].ToString()!,
                 r["schema_name"].ToString()!,
                 r["table_name"].ToString()!,
@@ -303,7 +301,7 @@ public sealed class PostgreSqlProvider
     // ── Foreign Keys ─────────────────────────────────────────────────────────
 
     public System.Threading.Tasks.Task<
-        System.Collections.Generic.List<ForeignKeyInfo>
+        System.Collections.Generic.List<Models.ForeignKeyInfo>
         > GetForeignKeysAsync(
         string? schema = null, 
         string? table = null,
@@ -335,7 +333,7 @@ public sealed class PostgreSqlProvider
             GROUP BY c.conname, n.nspname, cl.relname, rn.nspname, rcl.relname, c.confdeltype, c.confupdtype
             ORDER BY n.nspname, cl.relname, c.conname
             """,
-            r => new ForeignKeyInfo(
+            r => new Models.ForeignKeyInfo(
                 r["fk_name"].ToString()!,
                 r["schema_name"].ToString()!,
                 r["table_name"].ToString()!,
@@ -359,7 +357,7 @@ public sealed class PostgreSqlProvider
     // ── Procedures ───────────────────────────────────────────────────────────
 
     public System.Threading.Tasks.Task<
-        System.Collections.Generic.List<ProcedureInfo>
+        System.Collections.Generic.List<Models.ProcedureInfo>
         > GetProceduresAsync(
         string? schema = null,
         System.Threading.CancellationToken ct = default
@@ -374,14 +372,14 @@ public sealed class PostgreSqlProvider
               AND ($1::text IS NULL OR n.nspname = $1)
             ORDER BY n.nspname, p.proname
             """,
-            r => new ProcedureInfo(r["schema_name"].ToString()!, r["proc_name"].ToString()!,
+            r => new Models.ProcedureInfo(r["schema_name"].ToString()!, r["proc_name"].ToString()!,
                 "PROCEDURE", "", null, null, null),
             cmd => cmd.Parameters.AddWithValue(schema as object ?? System.DBNull.Value), ct);
 
     // ── Functions ────────────────────────────────────────────────────────────
 
     public System.Threading.Tasks.Task<
-        System.Collections.Generic.List<ProcedureInfo>
+        System.Collections.Generic.List<Models.ProcedureInfo>
         > GetFunctionsAsync(
         string? schema = null,
         System.Threading.CancellationToken ct = default
@@ -403,14 +401,14 @@ public sealed class PostgreSqlProvider
               AND ($1::text IS NULL OR n.nspname = $1)
             ORDER BY n.nspname, p.proname
             """,
-            r => new ProcedureInfo(r["schema_name"].ToString()!, r["func_name"].ToString()!,
+            r => new Models.ProcedureInfo(r["schema_name"].ToString()!, r["func_name"].ToString()!,
                 "FUNCTION", r["func_type"].ToString()!, null, null, null),
             cmd => cmd.Parameters.AddWithValue(schema as object ?? System.DBNull.Value), ct);
 
     // ── Parameters ───────────────────────────────────────────────────────────
 
     public System.Threading.Tasks.Task<
-        System.Collections.Generic.List<ProcedureParameter>
+        System.Collections.Generic.List<Models.ProcedureParameter>
         > GetProcedureParametersAsync(
         string schema, 
         string name,
@@ -427,7 +425,7 @@ public sealed class PostgreSqlProvider
             WHERE p.specific_schema = $1 AND p.specific_name LIKE $2 || '%'
             ORDER BY p.ordinal_position
             """,
-            r => new ProcedureParameter(
+            r => new Models.ProcedureParameter(
                 r["parameter_name"]?.ToString() ?? "",
                 (int)r["ordinal_position"],
                 r["parameter_mode"].ToString()!,
@@ -476,7 +474,7 @@ public sealed class PostgreSqlProvider
     // ── Triggers ─────────────────────────────────────────────────────────────
 
     public System.Threading.Tasks.Task<
-        System.Collections.Generic.List<TriggerInfo>
+        System.Collections.Generic.List<Models.TriggerInfo>
         > GetTriggersAsync(
         string? schema = null, 
         string? table = null,
@@ -496,7 +494,7 @@ public sealed class PostgreSqlProvider
               AND ($2::text IS NULL OR t.event_object_table = $2)
             ORDER BY t.trigger_schema, t.event_object_table, t.trigger_name
             """,
-            r => new TriggerInfo(
+            r => new Models.TriggerInfo(
                 r["trigger_name"].ToString()!,
                 r["schema_name"].ToString()!,
                 r["table_name"].ToString()!,
@@ -512,7 +510,7 @@ public sealed class PostgreSqlProvider
     // ── Sequences ────────────────────────────────────────────────────────────
 
     public System.Threading.Tasks.Task<
-        System.Collections.Generic.List<SequenceInfo>
+        System.Collections.Generic.List<Models.SequenceInfo>
         > GetSequencesAsync(
         string? schema = null,
         System.Threading.CancellationToken ct = default
@@ -532,7 +530,7 @@ public sealed class PostgreSqlProvider
             WHERE ($1::text IS NULL OR sequence_schema = $1)
             ORDER BY sequence_schema, sequence_name
             """,
-            r => new SequenceInfo(
+            r => new Models.SequenceInfo(
                 r["sequence_schema"].ToString()!,
                 r["sequence_name"].ToString()!,
                 r["data_type"].ToString()!,
@@ -546,8 +544,8 @@ public sealed class PostgreSqlProvider
 
     // ── Table Data ───────────────────────────────────────────────────────────
 
-    public async System.Threading.Tasks.Task<TableDataResult> GetTableDataAsync(
-        TableDataRequest req,
+    public async System.Threading.Tasks.Task<Models.TableDataResult> GetTableDataAsync(
+        Models.TableDataRequest req,
         System.Threading.CancellationToken ct = default
     )
     {
@@ -589,13 +587,13 @@ public sealed class PostgreSqlProvider
                 row.Add(rdr.IsDBNull(i) ? null : rdr.GetValue(i));
             rows.Add(row);
         }
-        return new TableDataResult(cols, rows, total, req.Page, req.PageSize);
+        return new Models.TableDataResult(cols, rows, total, req.Page, req.PageSize);
     }
 
     // ── Query Execution ──────────────────────────────────────────────────────
 
-    public async System.Threading.Tasks.Task<QueryResult> ExecuteQueryAsync(
-        QueryRequest request,
+    public async System.Threading.Tasks.Task<Models.QueryResult> ExecuteQueryAsync(
+       Models.QueryRequest request,
         System.Threading.CancellationToken ct = default
     )
     {
@@ -633,7 +631,7 @@ public sealed class PostgreSqlProvider
                 count++;
             }
             sw.Stop();
-            return new QueryResult(
+            return new Models.QueryResult(
                 true, 
                 cols, 
                 rows, 
@@ -645,7 +643,7 @@ public sealed class PostgreSqlProvider
         catch (System.Exception ex)
         {
             sw.Stop();
-            return new QueryResult(
+            return new Models.QueryResult(
                 false, 
                 [], 
                 [], 
@@ -658,7 +656,7 @@ public sealed class PostgreSqlProvider
 
     // ── DDL helpers ──────────────────────────────────────────────────────────
 
-    public async System.Threading.Tasks.Task<DdlResult> GetCreateScriptAsync(
+    public async System.Threading.Tasks.Task<Models.DdlResult> GetCreateScriptAsync(
         string schema, 
         string name, 
         string objectType,
@@ -667,11 +665,11 @@ public sealed class PostgreSqlProvider
     {
         string? def = await GetObjectDefinitionAsync(schema, name, objectType, ct);
         return def is null
-            ? new DdlResult(false, "Could not retrieve definition.", null)
-            : new DdlResult(true, null, def);
+            ? new Models.DdlResult(false, "Could not retrieve definition.", null)
+            : new Models.DdlResult(true, null, def);
     }
 
-    public async System.Threading.Tasks.Task<DdlResult> TruncateTableAsync(
+    public async System.Threading.Tasks.Task<Models.DdlResult> TruncateTableAsync(
         string schema, 
         string table,
         System.Threading.CancellationToken ct = default
@@ -682,15 +680,15 @@ public sealed class PostgreSqlProvider
             await using Npgsql.NpgsqlCommand cmd = _conn.CreateCommand();
             cmd.CommandText = $"TRUNCATE TABLE \"{schema}\".\"{table}\"";
             await cmd.ExecuteNonQueryAsync(ct);
-            return new DdlResult(true, null, null);
+            return new Models.DdlResult(true, null, null);
         }
         catch (System.Exception ex) 
         { 
-            return new DdlResult(false, ex.Message, null); 
+            return new Models.DdlResult(false, ex.Message, null); 
         }
     }
 
-    public async System.Threading.Tasks.Task<DdlResult> DropObjectAsync(
+    public async System.Threading.Tasks.Task<Models.DdlResult> DropObjectAsync(
         string schema, 
         string name, 
         string objectType,
@@ -715,16 +713,16 @@ public sealed class PostgreSqlProvider
 
             cmd.CommandText = ddl;
             await cmd.ExecuteNonQueryAsync(ct);
-            return new DdlResult(true, null, ddl);
+            return new Models.DdlResult(true, null, ddl);
         }
         catch (System.Exception ex) 
         { 
-            return new DdlResult(false, ex.Message, ddl); 
+            return new Models.DdlResult(false, ex.Message, ddl); 
         }
     }
 
     public System.Threading.Tasks.Task<
-        System.Collections.Generic.List<TablespaceInfo>
+        System.Collections.Generic.List<Models.TablespaceInfo>
         > GetTablespacesAsync(
         System.Threading.CancellationToken ct = default
     ) =>
@@ -735,7 +733,7 @@ public sealed class PostgreSqlProvider
             FROM pg_tablespace
             ORDER BY spcname
             """,
-            r => new TablespaceInfo(r["name"]
+            r => new Models.TablespaceInfo(r["name"]
                 .ToString()!
                 , r["location"]?.ToString()
                 , Val<long?>(r, "size_kb"))

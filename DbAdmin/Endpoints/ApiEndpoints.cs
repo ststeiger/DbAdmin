@@ -2,9 +2,6 @@
 namespace DbAdmin.Endpoints;
 
 
-using DbAdmin.Models;
-using DbAdmin.Services;
-
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 
@@ -33,7 +30,7 @@ public static class ApiEndpoints
 
     private static Microsoft.AspNetCore.Http.IResult GetProvider(
         Microsoft.AspNetCore.Http.HttpContext ctx, 
-        ConnectionSessionService svc, 
+        Services.ConnectionSessionService svc, 
         out Providers.IDbProvider? provider
     )
     {
@@ -75,8 +72,8 @@ public static class ApiEndpoints
 
         // POST /api/connections — open a new session
         grp.MapPost("/", async (
-            ConnectionRequest req,
-            ConnectionSessionService svc,
+            Models.ConnectionRequest req,
+            Services.ConnectionSessionService svc,
             System.Threading.CancellationToken ct
         ) =>
         {
@@ -94,7 +91,7 @@ public static class ApiEndpoints
         .WithSummary("Open a new database connection. Returns a connectionId to use in X-Connection-Id header.");
 
         // GET /api/connections — list all open sessions
-        grp.MapGet("/", (ConnectionSessionService svc) =>
+        grp.MapGet("/", (Services.ConnectionSessionService svc) =>
             Microsoft.AspNetCore.Http.Results.Ok(svc.ListConnections()))
         .WithName("ListConnections")
         .WithSummary("List all open sessions.");
@@ -102,7 +99,7 @@ public static class ApiEndpoints
         // DELETE /api/connections/{id} — close a session
         grp.MapDelete("/{id}", async (
             string id,
-            ConnectionSessionService svc
+            Services.ConnectionSessionService svc
         ) =>
         {
             bool removed = await svc.DisconnectAsync(id);
@@ -114,12 +111,14 @@ public static class ApiEndpoints
         // GET /api/connections/info — database-level metadata for the active connection
         grp.MapGet("/info", async (
             Microsoft.AspNetCore.Http.HttpContext ctx,
-            ConnectionSessionService svc,
+            Services.ConnectionSessionService svc,
             System.Threading.CancellationToken ct
         ) =>
         {
             Microsoft.AspNetCore.Http.IResult err = GetProvider(ctx, svc, out Providers.IDbProvider? p);
-            if (p is null) return err;
+            if (p is null) 
+                return err;
+
             return Microsoft.AspNetCore.Http.Results.Ok(await p.GetDatabaseInfoAsync(ct));
         })
         .WithName("GetDatabaseInfo")
@@ -141,12 +140,14 @@ public static class ApiEndpoints
 
         grp.MapGet("/", async (
             Microsoft.AspNetCore.Http.HttpContext ctx, 
-            ConnectionSessionService svc,
+            Services.ConnectionSessionService svc,
             System.Threading.CancellationToken ct
         ) =>
         {
             Microsoft.AspNetCore.Http.IResult err = GetProvider(ctx, svc, out Providers.IDbProvider? p);
-            if (p is null) return err;
+            if (p is null) 
+                return err;
+
             return Microsoft.AspNetCore.Http.Results.Ok(await p.GetSchemasAsync(ct));
         })
         .WithName("GetSchemas")
@@ -164,13 +165,15 @@ public static class ApiEndpoints
         // GET /api/tables?schema=dbo
         grp.MapGet("/", async (
             Microsoft.AspNetCore.Http.HttpContext ctx, 
-            ConnectionSessionService svc,
+            Services.ConnectionSessionService svc,
             string? schema, 
             System.Threading.CancellationToken ct
         ) =>
         {
             Microsoft.AspNetCore.Http.IResult err = GetProvider(ctx, svc, out Providers.IDbProvider? p);
-            if (p is null) return err;
+            if (p is null) 
+                return err;
+
             return Microsoft.AspNetCore.Http.Results.Ok(await p.GetTablesAsync(schema, ct));
         })
         .WithName("GetTables")
@@ -179,14 +182,16 @@ public static class ApiEndpoints
         // GET /api/tables/{schema}/{table}/columns
         grp.MapGet("/{schema}/{table}/columns", async (
             Microsoft.AspNetCore.Http.HttpContext ctx, 
-            ConnectionSessionService svc,
+            Services.ConnectionSessionService svc,
             string schema, 
             string table, 
             System.Threading.CancellationToken ct
         ) =>
         {
             Microsoft.AspNetCore.Http.IResult err = GetProvider(ctx, svc, out Providers.IDbProvider? p);
-            if (p is null) return err;
+            if (p is null) 
+                return err;
+
             return Microsoft.AspNetCore.Http.Results.Ok(await p.GetColumnsAsync(schema, table, ct));
         })
         .WithName("GetColumns")
@@ -195,14 +200,16 @@ public static class ApiEndpoints
         // GET /api/tables/{schema}/{table}/indexes
         grp.MapGet("/{schema}/{table}/indexes", async (
             Microsoft.AspNetCore.Http.HttpContext ctx, 
-            ConnectionSessionService svc,
+            Services.ConnectionSessionService svc,
             string schema, 
             string table, 
             System.Threading.CancellationToken ct
         ) =>
         {
             Microsoft.AspNetCore.Http.IResult err = GetProvider(ctx, svc, out Providers.IDbProvider? p);
-            if (p is null) return err;
+            if (p is null) 
+                return err;
+
             return Microsoft.AspNetCore.Http.Results.Ok(await p.GetIndexesAsync(schema, table, ct));
         })
         .WithName("GetTableIndexes")
@@ -210,7 +217,7 @@ public static class ApiEndpoints
 
         // GET /api/tables/{schema}/{table}/foreign-keys
         grp.MapGet("/{schema}/{table}/foreign-keys", async (
-            Microsoft.AspNetCore.Http.HttpContext ctx, ConnectionSessionService svc,
+            Microsoft.AspNetCore.Http.HttpContext ctx, Services.ConnectionSessionService svc,
             string schema, 
             string table, 
             System.Threading.CancellationToken ct
@@ -226,14 +233,16 @@ public static class ApiEndpoints
         // GET /api/tables/{schema}/{table}/triggers
         grp.MapGet("/{schema}/{table}/triggers", async (
             Microsoft.AspNetCore.Http.HttpContext ctx, 
-            ConnectionSessionService svc,
+            Services.ConnectionSessionService svc,
             string schema, 
             string table, 
             System.Threading.CancellationToken ct
         ) =>
         {
             Microsoft.AspNetCore.Http.IResult err = GetProvider(ctx, svc, out Providers.IDbProvider? p);
-            if (p is null) return err;
+            if (p is null) 
+                return err;
+
             return Microsoft.AspNetCore.Http.Results.Ok(await p.GetTriggersAsync(schema, table, ct));
         })
         .WithName("GetTableTriggers")
@@ -250,13 +259,15 @@ public static class ApiEndpoints
 
         grp.MapGet("/", async (
             Microsoft.AspNetCore.Http.HttpContext ctx, 
-            ConnectionSessionService svc,
+            Services.ConnectionSessionService svc,
             string? schema, 
             System.Threading.CancellationToken ct
         ) =>
         {
             Microsoft.AspNetCore.Http.IResult err = GetProvider(ctx, svc, out Providers.IDbProvider? p);
-            if (p is null) return err;
+            if (p is null) 
+                return err;
+
             return Microsoft.AspNetCore.Http.Results.Ok(await p.GetViewsAsync(schema, ct));
         })
         .WithName("GetViews")
@@ -264,7 +275,7 @@ public static class ApiEndpoints
 
         grp.MapGet("/{schema}/{name}/definition", async (
             Microsoft.AspNetCore.Http.HttpContext ctx, 
-            ConnectionSessionService svc,
+            Services.ConnectionSessionService svc,
             string schema, 
             string name,
             System.Threading.CancellationToken ct
@@ -280,7 +291,7 @@ public static class ApiEndpoints
 
         grp.MapGet("/{schema}/{name}/columns", async (
             Microsoft.AspNetCore.Http.HttpContext ctx, 
-            ConnectionSessionService svc,
+            Services.ConnectionSessionService svc,
             string schema, 
             string name, 
             System.Threading.CancellationToken ct
@@ -308,7 +319,7 @@ public static class ApiEndpoints
 
         grp.MapGet("/procedures", async (
             Microsoft.AspNetCore.Http.HttpContext ctx, 
-            ConnectionSessionService svc,
+            Services.ConnectionSessionService svc,
             string? schema, 
             System.Threading.CancellationToken ct
         ) =>
@@ -322,28 +333,32 @@ public static class ApiEndpoints
 
         grp.MapGet("/procedures/{schema}/{name}/parameters", async (
             Microsoft.AspNetCore.Http.HttpContext ctx, 
-            ConnectionSessionService svc,
+            Services.ConnectionSessionService svc,
             string schema, 
             string name, 
             System.Threading.CancellationToken ct
         ) =>
         {
             Microsoft.AspNetCore.Http.IResult err = GetProvider(ctx, svc, out Providers.IDbProvider? p);
-            if (p is null) return err;
+            if (p is null) 
+                return err;
+
             return Microsoft.AspNetCore.Http.Results.Ok(await p.GetProcedureParametersAsync(schema, name, ct));
         })
         .WithName("GetProcedureParameters")
         .WithSummary("Parameters of a stored procedure.");
 
         grp.MapGet("/procedures/{schema}/{name}/definition", async (
-            Microsoft.AspNetCore.Http.HttpContext ctx, ConnectionSessionService svc,
+            Microsoft.AspNetCore.Http.HttpContext ctx, Services.ConnectionSessionService svc,
             string schema, 
             string name, 
             System.Threading.CancellationToken ct
         ) =>
         {
             Microsoft.AspNetCore.Http.IResult err = GetProvider(ctx, svc, out Providers.IDbProvider? p);
-            if (p is null) return err;
+            if (p is null) 
+                return err;
+
             string? def = await p.GetObjectDefinitionAsync(schema, name, "PROCEDURE", ct);
             return def is null ? Microsoft.AspNetCore.Http.Results.NotFound() : Microsoft.AspNetCore.Http.Results.Ok(new { Definition = def });
         })
@@ -354,7 +369,7 @@ public static class ApiEndpoints
 
         grp.MapGet("/functions", async (
             Microsoft.AspNetCore.Http.HttpContext ctx, 
-            ConnectionSessionService svc,
+            Services.ConnectionSessionService svc,
             string? schema, 
             System.Threading.CancellationToken ct
         ) =>
@@ -368,13 +383,15 @@ public static class ApiEndpoints
 
         grp.MapGet("/functions/{schema}/{name}/parameters", async (
             Microsoft.AspNetCore.Http.HttpContext ctx, 
-            ConnectionSessionService svc,
+            Services.ConnectionSessionService svc,
             string schema, 
             string name,
             System.Threading.CancellationToken ct) =>
         {
             Microsoft.AspNetCore.Http.IResult err = GetProvider(ctx, svc, out Providers.IDbProvider? p);
-            if (p is null) return err;
+            if (p is null) 
+                return err;
+
             return Microsoft.AspNetCore.Http.Results.Ok(await p.GetProcedureParametersAsync(schema, name, ct));
         })
         .WithName("GetFunctionParameters")
@@ -382,13 +399,15 @@ public static class ApiEndpoints
 
         grp.MapGet("/functions/{schema}/{name}/definition", async (
             Microsoft.AspNetCore.Http.HttpContext ctx, 
-            ConnectionSessionService svc,
+            Services.ConnectionSessionService svc,
             string schema, 
             string name, 
             System.Threading.CancellationToken ct) =>
         {
             Microsoft.AspNetCore.Http.IResult err = GetProvider(ctx, svc, out Providers.IDbProvider? p);
-            if (p is null) return err;
+            if (p is null) 
+                return err;
+
             string? def = await p.GetObjectDefinitionAsync(schema, name, "FUNCTION", ct);
             return def is null ? Microsoft.AspNetCore.Http.Results.NotFound() : Microsoft.AspNetCore.Http.Results.Ok(new { Definition = def });
         })
@@ -406,7 +425,7 @@ public static class ApiEndpoints
 
         grp.MapGet("/", async (
             Microsoft.AspNetCore.Http.HttpContext ctx, 
-            ConnectionSessionService svc,
+            Services.ConnectionSessionService svc,
             string? schema, 
             System.Threading.CancellationToken ct
         ) =>
@@ -427,13 +446,15 @@ public static class ApiEndpoints
     {
         Microsoft.AspNetCore.Routing.RouteGroupBuilder grp = app.MapGroup("/api/sequences").WithTags("Sequences");
 
-        grp.MapGet("/", async (Microsoft.AspNetCore.Http.HttpContext ctx, ConnectionSessionService svc,
+        grp.MapGet("/", async (Microsoft.AspNetCore.Http.HttpContext ctx, Services.ConnectionSessionService svc,
             string? schema, 
             System.Threading.CancellationToken ct
         ) =>
         {
             Microsoft.AspNetCore.Http.IResult err = GetProvider(ctx, svc, out Providers.IDbProvider? p);
-            if (p is null) return err;
+            if (p is null) 
+                return err;
+
             return Microsoft.AspNetCore.Http.Results.Ok(await p.GetSequencesAsync(schema, ct));
         })
         .WithName("GetSequences")
@@ -450,13 +471,15 @@ public static class ApiEndpoints
 
         grp.MapGet("/", async (
             Microsoft.AspNetCore.Http.HttpContext ctx, 
-            ConnectionSessionService svc,
+            Services.ConnectionSessionService svc,
             string? schema, 
             System.Threading.CancellationToken ct
         ) =>
         {
             Microsoft.AspNetCore.Http.IResult err = GetProvider(ctx, svc, out Providers.IDbProvider? p);
-            if (p is null) return err;
+            if (p is null) 
+                return err;
+
             return Microsoft.AspNetCore.Http.Results.Ok(await p.GetIndexesAsync(schema, null, ct));
         })
         .WithName("GetIndexes")
@@ -473,13 +496,15 @@ public static class ApiEndpoints
 
         grp.MapGet("/", async (
             Microsoft.AspNetCore.Http.HttpContext ctx, 
-            ConnectionSessionService svc,
+            Services.ConnectionSessionService svc,
             string? schema, 
             System.Threading.CancellationToken ct
         ) =>
         {
             Microsoft.AspNetCore.Http.IResult err = GetProvider(ctx, svc, out Providers.IDbProvider? p);
-            if (p is null) return err;
+            if (p is null) 
+                return err;
+
             return Microsoft.AspNetCore.Http.Results.Ok(await p.GetForeignKeysAsync(schema, null, ct));
         })
         .WithName("GetForeignKeys")
@@ -497,7 +522,7 @@ public static class ApiEndpoints
         // GET /api/data/{schema}/{table}?page=1&pageSize=100&orderBy=Id&descending=false&filter=...
         grp.MapGet("/{schema}/{table}", async (
             Microsoft.AspNetCore.Http.HttpContext ctx, 
-            ConnectionSessionService svc,
+            Services.ConnectionSessionService svc,
             string schema, 
             string table,
             int page = 1, 
@@ -512,7 +537,10 @@ public static class ApiEndpoints
             if (p is null) 
                 return err;
 
-            TableDataRequest req = new TableDataRequest(schema, table, page, System.Math.Min(pageSize, 5000), orderBy, descending, filter);
+            Models.TableDataRequest req = new Models.TableDataRequest(schema, table, page, 
+                System.Math.Min(pageSize, 5000), orderBy, descending, filter
+            );
+
             return Microsoft.AspNetCore.Http.Results.Ok(await p.GetTableDataAsync(req, ct));
         })
         .WithName("GetTableData")
@@ -521,8 +549,8 @@ public static class ApiEndpoints
         // POST /api/data/query — run arbitrary SQL
         grp.MapPost("/query", async (
             Microsoft.AspNetCore.Http.HttpContext ctx, 
-            ConnectionSessionService svc,
-            QueryRequest req, 
+            Services.ConnectionSessionService svc,
+            Models.QueryRequest req, 
             System.Threading.CancellationToken ct
         ) =>
         {
@@ -530,7 +558,7 @@ public static class ApiEndpoints
             if (p is null) 
                 return err;
 
-            QueryResult result = await p.ExecuteQueryAsync(req, ct);
+            Models.QueryResult result = await p.ExecuteQueryAsync(req, ct);
             return result.Success ? Microsoft.AspNetCore.Http.Results.Ok(result) : Microsoft.AspNetCore.Http.Results.UnprocessableEntity(result);
         })
         .WithName("ExecuteQuery")
@@ -548,7 +576,7 @@ public static class ApiEndpoints
         // GET /api/ddl/{schema}/{name}/script?objectType=TABLE
         grp.MapGet("/{schema}/{name}/script", async (
             Microsoft.AspNetCore.Http.HttpContext ctx, 
-            ConnectionSessionService svc,
+            Services.ConnectionSessionService svc,
             string schema, 
             string name, 
             string objectType,
@@ -556,8 +584,10 @@ public static class ApiEndpoints
         ) =>
         {
             Microsoft.AspNetCore.Http.IResult err = GetProvider(ctx, svc, out Providers.IDbProvider? p);
-            if (p is null) return err;
-            DdlResult result = await p.GetCreateScriptAsync(schema, name, objectType, ct);
+            if (p is null) 
+                return err;
+
+            Models.DdlResult result = await p.GetCreateScriptAsync(schema, name, objectType, ct);
             return result.Success ? Microsoft.AspNetCore.Http.Results.Ok(result) : Microsoft.AspNetCore.Http.Results.NotFound(result);
         })
         .WithName("GetCreateScript")
@@ -566,7 +596,7 @@ public static class ApiEndpoints
         // DELETE /api/ddl/{schema}/{name}?objectType=TABLE
         grp.MapDelete("/{schema}/{name}", async (
             Microsoft.AspNetCore.Http.HttpContext ctx, 
-            ConnectionSessionService svc,
+            Services.ConnectionSessionService svc,
             string schema, 
             string name, 
             string objectType, 
@@ -574,8 +604,10 @@ public static class ApiEndpoints
         ) =>
         {
             Microsoft.AspNetCore.Http.IResult err = GetProvider(ctx, svc, out Providers.IDbProvider? p);
-            if (p is null) return err;
-            DdlResult result = await p.DropObjectAsync(schema, name, objectType, ct);
+            if (p is null) 
+                return err;
+
+            Models.DdlResult result = await p.DropObjectAsync(schema, name, objectType, ct);
             return result.Success ? Microsoft.AspNetCore.Http.Results.Ok(result) : Microsoft.AspNetCore.Http.Results.UnprocessableEntity(result);
         })
         .WithName("DropObject")
@@ -584,15 +616,17 @@ public static class ApiEndpoints
         // POST /api/ddl/{schema}/{table}/truncate
         grp.MapPost("/{schema}/{table}/truncate", async (
             Microsoft.AspNetCore.Http.HttpContext ctx, 
-            ConnectionSessionService svc,
+            Services.ConnectionSessionService svc,
             string schema, 
             string table, 
             System.Threading.CancellationToken ct
         ) =>
         {
             Microsoft.AspNetCore.Http.IResult err = GetProvider(ctx, svc, out Providers.IDbProvider? p);
-            if (p is null) return err;
-            DdlResult result = await p.TruncateTableAsync(schema, table, ct);
+            if (p is null) 
+                return err;
+
+            Models.DdlResult result = await p.TruncateTableAsync(schema, table, ct);
             return result.Success ? Microsoft.AspNetCore.Http.Results.Ok(result) : Microsoft.AspNetCore.Http.Results.UnprocessableEntity(result);
         })
         .WithName("TruncateTable")
@@ -601,11 +635,13 @@ public static class ApiEndpoints
         // GET /api/ddl/tablespaces
         grp.MapGet("/tablespaces", async (
             Microsoft.AspNetCore.Http.HttpContext ctx, 
-            ConnectionSessionService svc, System.Threading.CancellationToken ct
+            Services.ConnectionSessionService svc, System.Threading.CancellationToken ct
         ) =>
         {
             Microsoft.AspNetCore.Http.IResult err = GetProvider(ctx, svc, out Providers.IDbProvider? p);
-            if (p is null) return err;
+            if (p is null) 
+                return err;
+
             return Microsoft.AspNetCore.Http.Results.Ok(await p.GetTablespacesAsync(ct));
         })
         .WithName("GetTablespaces")
