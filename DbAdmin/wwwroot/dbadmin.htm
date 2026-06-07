@@ -1,0 +1,892 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>DbAdmin</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=Syne:wght@400;500;600;700&display=swap" rel="stylesheet"/>
+<link rel="stylesheet" href="dbadmin.css"/>
+</head>
+<body>
+
+<!-- ── CONNECT MODAL ── -->
+<div id="modal-overlay">
+  <div class="modal">
+    <h2>Connect to database</h2>
+    <p class="modal-sub">Enter your connection details to get started.</p>
+    <div id="conn-error" class="error-msg hidden"></div>
+    <div class="form-row">
+      <label>Provider</label>
+      <select id="f-provider">
+        <option value="0">MS SQL Server</option>
+        <option value="1">PostgreSQL</option>
+      </select>
+    </div>
+    <div class="form-grid">
+      <div class="form-row">
+        <label>Host</label>
+        <input id="f-host" type="text" value="localhost" placeholder="localhost"/>
+      </div>
+      <div class="form-row">
+        <label>Port</label>
+        <input id="f-port" type="number" value="1433" placeholder="1433"/>
+      </div>
+    </div>
+    <div class="form-row">
+      <label>Database</label>
+      <input id="f-database" type="text" placeholder="master"/>
+    </div>
+    <div class="form-grid">
+      <div class="form-row">
+        <label>Username</label>
+        <input id="f-username" type="text" placeholder="sa"/>
+      </div>
+      <div class="form-row">
+        <label>Password</label>
+        <input id="f-password" type="password" placeholder="••••••••"/>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn primary" id="btn-connect" onclick="doConnect()">
+        <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M2 8h12M8 2l6 6-6 6"/></svg>
+        Connect
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- ── TOPBAR ── -->
+<div id="topbar">
+  <div class="logo">db<span>admin</span></div>
+  <div class="conn-badge" id="conn-badge" onclick="showConnectModal()">
+    <div class="dot off" id="conn-dot"></div>
+    <span id="conn-label">Not connected</span>
+  </div>
+  <div class="spacer"></div>
+  <button id="theme-toggle" onclick="toggleTheme()" title="Toggle light/dark theme" aria-label="Toggle theme">
+    <!-- Icon is swapped by JS -->
+    <svg id="theme-icon-dark" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" style="display:none"><path d="M8 1v2M8 13v2M1 8h2M13 8h2M3.05 3.05l1.41 1.41M11.54 11.54l1.41 1.41M3.05 12.95l1.41-1.41M11.54 4.46l1.41-1.41"/><circle cx="8" cy="8" r="3"/></svg>
+    <svg id="theme-icon-light" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M13 8A5 5 0 1 1 8 3a4 4 0 0 0 5 5z"/></svg>
+  </button>
+  <button class="btn" id="btn-new-query" onclick="openQueryTab()" title="New Query">
+    <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="2" y="2" width="12" height="12" rx="2"/><path d="M5 8h6M5 5.5h6M5 10.5h4"/></svg>
+    Query
+  </button>
+  <button class="btn danger" id="btn-disconnect" onclick="doDisconnect()" style="margin-left:4px">
+    <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M10 8H2m4-4-4 4 4 4m5-8h2a1 1 0 0 1 1 1v6a1 1 0 0 1-1 1h-2"/></svg>
+    Disconnect
+  </button>
+</div>
+
+<!-- ── LAYOUT ── -->
+<div id="layout">
+  <!-- SIDEBAR -->
+  <div id="sidebar">
+    <div class="sidebar-section" id="nav-tables-section">
+      <div class="sidebar-header open" onclick="toggleSection('tables')">
+        <span>Tables</span>
+        <svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M4 2l4 4-4 4"/></svg>
+      </div>
+      <div class="sidebar-tree" id="nav-tables" style="max-height:200px"></div>
+    </div>
+    <div class="sidebar-section" id="nav-views-section">
+      <div class="sidebar-header open" onclick="toggleSection('views')">
+        <span>Views</span>
+        <svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M4 2l4 4-4 4"/></svg>
+      </div>
+      <div class="sidebar-tree" id="nav-views" style="max-height:140px"></div>
+    </div>
+    <div class="sidebar-section" id="nav-procs-section">
+      <div class="sidebar-header open" onclick="toggleSection('procs')">
+        <span>Procedures</span>
+        <svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M4 2l4 4-4 4"/></svg>
+      </div>
+      <div class="sidebar-tree" id="nav-procs" style="max-height:140px"></div>
+    </div>
+    <div class="sidebar-section" id="nav-funcs-section">
+      <div class="sidebar-header open" onclick="toggleSection('funcs')">
+        <span>Functions</span>
+        <svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M4 2l4 4-4 4"/></svg>
+      </div>
+      <div class="sidebar-tree" id="nav-funcs" style="max-height:140px"></div>
+    </div>
+    <div class="sidebar-section" id="nav-seqs-section">
+      <div class="sidebar-header open" onclick="toggleSection('seqs')">
+        <span>Sequences</span>
+        <svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M4 2l4 4-4 4"/></svg>
+      </div>
+      <div class="sidebar-tree" id="nav-seqs" style="max-height:140px"></div>
+    </div>
+  </div>
+
+  <!-- RESIZER -->
+  <div id="resizer"></div>
+
+  <!-- MAIN -->
+  <div id="main">
+    <div id="tabs"></div>
+    <div id="content">
+      <div class="empty" id="welcome">
+        <svg viewBox="0 0 40 40" fill="none" stroke="currentColor" stroke-width="1.2"><ellipse cx="20" cy="12" rx="14" ry="5"/><path d="M6 12v8c0 2.8 6.3 5 14 5s14-2.2 14-5v-8"/><path d="M6 20v8c0 2.8 6.3 5 14 5s14-2.2 14-5v-8"/></svg>
+        <p>Connect to a database to begin</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+/* ──────────────────────────────────────────
+   THEME
+────────────────────────────────────────── */
+const THEME_KEY = 'dbadmin-theme';
+
+function getSystemTheme() {
+  return window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark';
+}
+
+function applyTheme(theme) {
+  // 'system' means remove the attribute and let CSS media query handle it
+  if (theme === 'system') {
+    document.documentElement.removeAttribute('data-theme');
+  } else {
+    document.documentElement.setAttribute('data-theme', theme);
+  }
+  updateThemeIcon(theme === 'system' ? getSystemTheme() : theme);
+}
+
+function updateThemeIcon(effectiveTheme) {
+  // When in light mode, show the moon (to switch to dark); when dark, show the sun
+  document.getElementById('theme-icon-dark').style.display = effectiveTheme === 'light' ? '' : 'none';
+  document.getElementById('theme-icon-light').style.display = effectiveTheme === 'dark'  ? '' : 'none';
+}
+
+function toggleTheme() {
+  const current = localStorage.getItem(THEME_KEY) || 'system';
+  const effective = current === 'system' ? getSystemTheme() : current;
+  const next = effective === 'dark' ? 'light' : 'dark';
+  localStorage.setItem(THEME_KEY, next);
+  applyTheme(next);
+}
+
+// Init: apply saved preference (or system default)
+(function () {
+  const saved = localStorage.getItem(THEME_KEY) || 'system';
+  applyTheme(saved);
+
+  // Keep icon in sync if system theme changes while no override is set
+  window.matchMedia('(prefers-color-scheme: light)').addEventListener('change', () => {
+    if ((localStorage.getItem(THEME_KEY) || 'system') === 'system') {
+      updateThemeIcon(getSystemTheme());
+    }
+  });
+})();
+
+/* ──────────────────────────────────────────
+   STATE
+────────────────────────────────────────── */
+const API = '';  // Set to your backend URL, e.g. 'http://localhost:5000'
+let connId = null;
+let connInfo = null;
+let tabs = [];
+let activeTab = null;
+let tabCounter = 0;
+
+/* ──────────────────────────────────────────
+   API HELPERS
+────────────────────────────────────────── */
+async function api(method, path, body = null) {
+  const opts = {
+    method,
+    headers: { 'Content-Type': 'application/json', ...(connId ? { 'X-Connection-Id': connId } : {}) }
+  };
+  if (body) opts.body = JSON.stringify(body);
+  const r = await fetch(API + path, opts);
+  if (!r.ok) {
+    const txt = await r.text();
+    let msg;
+    try { msg = JSON.parse(txt); msg = msg.detail || msg.error || JSON.stringify(msg); } catch { msg = txt; }
+    throw new Error(msg || `HTTP ${r.status}`);
+  }
+  return r.status === 204 ? null : r.json();
+}
+
+/* ──────────────────────────────────────────
+   CONNECT / DISCONNECT
+────────────────────────────────────────── */
+function showConnectModal() {
+  document.getElementById('modal-overlay').classList.remove('hidden');
+}
+
+document.getElementById('f-provider').addEventListener('change', () => {
+  const p = document.getElementById('f-provider').value;
+  document.getElementById('f-port').value = p === '0' ? '1433' : '5432';
+});
+
+async function doConnect() {
+  const btn = document.getElementById('btn-connect');
+  const errEl = document.getElementById('conn-error');
+  errEl.classList.add('hidden');
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner"></span> Connecting…';
+
+  try {
+    const body = {
+      Provider: parseInt(document.getElementById('f-provider').value),
+      Host: document.getElementById('f-host').value,
+      Port: parseInt(document.getElementById('f-port').value),
+      Database: document.getElementById('f-database').value,
+      Username: document.getElementById('f-username').value,
+      Password: document.getElementById('f-password').value,
+      TrustServerCertificate: true
+    };
+    const info = await api('POST', '/api/connections', body);
+    connId = info.connectionId;
+    connInfo = info;
+    document.getElementById('modal-overlay').classList.add('hidden');
+    document.getElementById('conn-dot').classList.remove('off');
+    document.getElementById('conn-label').textContent = `${info.database} @ ${info.host}`;
+    document.getElementById('btn-disconnect').style.display = '';
+    document.getElementById('welcome').innerHTML = '<span class="spinner"></span>';
+    await loadSidebar();
+    openDbInfoTab();
+  } catch(e) {
+    errEl.textContent = e.message;
+    errEl.classList.remove('hidden');
+  }
+
+  btn.disabled = false;
+  btn.innerHTML = '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M2 8h12M8 2l6 6-6 6"/></svg> Connect';
+}
+
+async function doDisconnect() {
+  if (!connId) return;
+  try { await api('DELETE', `/api/connections/${connId}`); } catch {}
+  connId = null; connInfo = null;
+  document.getElementById('conn-dot').classList.add('off');
+  document.getElementById('conn-label').textContent = 'Not connected';
+  tabs = []; activeTab = null; tabCounter = 0;
+  renderTabs();
+  document.getElementById('content').innerHTML = '<div class="empty" id="welcome"><svg viewBox="0 0 40 40" fill="none" stroke="currentColor" stroke-width="1.2"><ellipse cx="20" cy="12" rx="14" ry="5"/><path d="M6 12v8c0 2.8 6.3 5 14 5s14-2.2 14-5v-8"/><path d="M6 20v8c0 2.8 6.3 5 14 5s14-2.2 14-5v-8"/></svg><p>Connect to a database to begin</p></div>';
+  ['tables','views','procs','funcs','seqs'].forEach(k => document.getElementById(`nav-${k}`).innerHTML = '');
+  showConnectModal();
+}
+
+/* ──────────────────────────────────────────
+   SIDEBAR LOADER
+────────────────────────────────────────── */
+async function loadSidebar() {
+  try {
+    const [tables, views, procs, funcs, seqs] = await Promise.all([
+      api('GET', '/api/tables'),
+      api('GET', '/api/views'),
+      api('GET', '/api/programmability/procedures'),
+      api('GET', '/api/programmability/functions'),
+      api('GET', '/api/sequences')
+    ]);
+    renderSidebarGroup('tables', tables, t => ({
+      label: `${t.schema}.${t.name}`,
+      icon: tableIcon(),
+      action: () => openTableTab(t.schema, t.name)
+    }));
+    renderSidebarGroup('views', views, v => ({
+      label: `${v.schema}.${v.name}`,
+      icon: viewIcon(),
+      action: () => openViewTab(v.schema, v.name)
+    }));
+    renderSidebarGroup('procs', procs, p => ({
+      label: `${p.schema}.${p.name}`,
+      icon: procIcon(),
+      action: () => openDefinitionTab(p.schema, p.name, 'PROCEDURE')
+    }));
+    renderSidebarGroup('funcs', funcs, f => ({
+      label: `${f.schema}.${f.name}`,
+      icon: funcIcon(),
+      action: () => openDefinitionTab(f.schema, f.name, 'FUNCTION')
+    }));
+    renderSidebarGroup('seqs', seqs, s => ({
+      label: `${s.schema}.${s.name}`,
+      icon: seqIcon(),
+      action: () => openSeqTab(s.schema, s.name)
+    }));
+    document.getElementById('welcome').innerHTML = '<p style="color:var(--text3);font-size:13px">Select an object to inspect, or click Query.</p>';
+  } catch(e) {
+    document.getElementById('welcome').innerHTML = `<p style="color:var(--red)">${e.message}</p>`;
+  }
+}
+
+function renderSidebarGroup(key, items, mapper) {
+  const el = document.getElementById(`nav-${key}`);
+  if (!items || !items.length) { el.innerHTML = '<div style="padding:6px 20px;font-size:12px;color:var(--text3)">None</div>'; return; }
+  el.innerHTML = items.map((item, i) => {
+    const m = mapper(item);
+    return `<div class="tree-node" data-idx="${key}-${i}" onclick="(${m.action.toString()})()">${m.icon}<span style="overflow:hidden;text-overflow:ellipsis">${m.label}</span></div>`;
+  }).join('');
+}
+
+/* ──────────────────────────────────────────
+   ICONS
+────────────────────────────────────────── */
+const mkIcon = d => `<svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5">${d}</svg>`;
+const tableIcon = () => mkIcon('<rect x="1" y="3" width="12" height="8" rx="1"/><path d="M1 6h12M5 3v8"/>');
+const viewIcon  = () => mkIcon('<path d="M1 7s2.5-4 6-4 6 4 6 4-2.5 4-6 4-6-4-6-4z"/><circle cx="7" cy="7" r="1.5"/>');
+const procIcon  = () => mkIcon('<path d="M3 3l4 4-4 4M7 11h4"/>');
+const funcIcon  = () => mkIcon('<path d="M4 3c0 2-2 2-2 4s2 2 2 4M7 3v8M10 3c0 2 2 2 2 4s-2 2-2 4"/>');
+const seqIcon   = () => mkIcon('<path d="M2 10V7l2-2V3M7 3v8M12 3v3l-2 2v3"/>');
+
+/* ──────────────────────────────────────────
+   TABS
+────────────────────────────────────────── */
+function renderTabs() {
+  const el = document.getElementById('tabs');
+  el.innerHTML = tabs.map(t => `
+    <div class="tab ${t.id === activeTab ? 'active' : ''}" onclick="switchTab('${t.id}')">
+      ${t.label}
+      <span class="tab-close" onclick="event.stopPropagation();closeTab('${t.id}')">✕</span>
+    </div>
+  `).join('');
+}
+
+function switchTab(id) {
+  activeTab = id;
+  renderTabs();
+  const t = tabs.find(x => x.id === id);
+  if (t) renderTabContent(t);
+}
+
+function closeTab(id) {
+  tabs = tabs.filter(t => t.id !== id);
+  if (activeTab === id) {
+    activeTab = tabs.length ? tabs[tabs.length - 1].id : null;
+    if (activeTab) renderTabContent(tabs.find(x => x.id === activeTab));
+    else document.getElementById('content').innerHTML = '<div class="empty"><p style="color:var(--text3)">No tabs open</p></div>';
+  }
+  renderTabs();
+}
+
+function openTab(label, type, data) {
+  const id = `tab-${++tabCounter}`;
+  tabs.push({ id, label, type, data });
+  activeTab = id;
+  renderTabs();
+  renderTabContent(tabs[tabs.length - 1]);
+}
+
+function renderTabContent(tab) {
+  const c = document.getElementById('content');
+  c.innerHTML = '';
+  switch (tab.type) {
+    case 'dbinfo':    renderDbInfo(c, tab.data); break;
+    case 'table':     renderTableView(c, tab.data); break;
+    case 'view':      renderViewDetails(c, tab.data); break;
+    case 'query':     renderQueryEditor(c, tab.data); break;
+    case 'definition':renderDefinition(c, tab.data); break;
+    case 'sequences': renderSequences(c, tab.data); break;
+  }
+}
+
+/* ──────────────────────────────────────────
+   SECTION TOGGLE
+────────────────────────────────────────── */
+function toggleSection(key) {
+  const tree = document.getElementById(`nav-${key}`);
+  const hdr = document.querySelector(`#nav-${key}-section .sidebar-header`);
+  const isOpen = hdr.classList.contains('open');
+  if (isOpen) { tree.style.maxHeight = '0'; tree.style.overflow = 'hidden'; hdr.classList.remove('open'); }
+  else { tree.style.maxHeight = '200px'; tree.style.overflow = 'auto'; hdr.classList.add('open'); }
+}
+
+/* ──────────────────────────────────────────
+   DB INFO TAB
+────────────────────────────────────────── */
+async function openDbInfoTab() {
+  try {
+    const info = await api('GET', '/api/connections/info');
+    openTab('Database Info', 'dbinfo', info);
+  } catch {}
+}
+
+function renderDbInfo(c, info) {
+  const fmt = (v) => v == null ? '<span class="null-val">null</span>' : escHtml(String(v));
+  const sizeLabel = info.sizeKb ? `${(info.sizeKb / 1024).toFixed(1)} MB` : '—';
+  c.innerHTML = `
+    <div class="info-grid">
+      ${card('Database', info.name)}
+      ${card('Version', info.version, true)}
+      ${card('Encoding', info.encoding || '—')}
+      ${card('Collation', info.collation || '—', true)}
+      ${card('Size', sizeLabel)}
+      ${card('Created', info.createDate ? new Date(info.createDate).toLocaleString() : '—')}
+    </div>
+    <div style="padding:0 24px">
+      <div style="font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:var(--text3);margin-bottom:10px">Open Sessions</div>
+    </div>
+  `;
+  function card(label, val, mono=false) {
+    return `<div class="info-card"><div class="label">${label}</div><div class="value ${mono?'mono':''}">${fmt(val)}</div></div>`;
+  }
+}
+
+/* ──────────────────────────────────────────
+   TABLE VIEW
+────────────────────────────────────────── */
+function openTableTab(schema, name) {
+  openTab(`${schema}.${name}`, 'table', { schema, name });
+}
+
+const tableState = {};
+
+function renderTableView(c, { schema, name }) {
+  const key = `${schema}.${name}`;
+  if (!tableState[key]) tableState[key] = { tab: 'data', page: 1, pageSize: 100, orderBy: null, desc: false, filter: '' };
+  const st = tableState[key];
+
+  c.innerHTML = `
+    <div id="data-panel">
+      <div class="object-header">
+        <h1>${escHtml(schema)}.${escHtml(name)}</h1>
+        <div class="object-tabs">
+          <div class="object-tab ${st.tab==='data'?'active':''}" onclick="switchObjectTab('${key}','data')">Data</div>
+          <div class="object-tab ${st.tab==='columns'?'active':''}" onclick="switchObjectTab('${key}','columns')">Columns</div>
+          <div class="object-tab ${st.tab==='indexes'?'active':''}" onclick="switchObjectTab('${key}','indexes')">Indexes</div>
+          <div class="object-tab ${st.tab==='fk'?'active':''}" onclick="switchObjectTab('${key}','fk')">Foreign Keys</div>
+          <div class="object-tab ${st.tab==='triggers'?'active':''}" onclick="switchObjectTab('${key}','triggers')">Triggers</div>
+          <div class="object-tab ${st.tab==='ddl'?'active':''}" onclick="switchObjectTab('${key}','ddl')">DDL</div>
+        </div>
+      </div>
+      <div id="tab-body-${key.replace(/\./g,'_')}" style="flex:1;overflow:hidden;display:flex;flex-direction:column"></div>
+    </div>
+  `;
+  loadObjectTab(key, schema, name, 'TABLE');
+}
+
+function switchObjectTab(key, tab) {
+  const [schema, name] = key.split('.');
+  tableState[key].tab = tab;
+  const c = document.getElementById('content');
+  renderTableView(c, { schema, name });
+}
+
+async function loadObjectTab(key, schema, name, type) {
+  const st = tableState[key];
+  const bodyId = `tab-body-${key.replace(/\./g,'_')}`;
+  const body = document.getElementById(bodyId);
+  if (!body) return;
+  body.innerHTML = '<div style="flex:1;display:flex;align-items:center;justify-content:center"><span class="spinner"></span></div>';
+
+  try {
+    if (st.tab === 'data') {
+      const params = `?page=${st.page}&pageSize=${st.pageSize}${st.orderBy?`&orderBy=${encodeURIComponent(st.orderBy)}&descending=${st.desc}`:''}${st.filter?`&filter=${encodeURIComponent(st.filter)}`:''}`;
+      const res = await api('GET', `/api/data/${schema}/${name}${params}`);
+      renderDataTable(body, key, schema, name, res, st);
+    } else if (st.tab === 'columns') {
+      const cols = await api('GET', `/api/tables/${schema}/${name}/columns`);
+      renderColumns(body, cols);
+    } else if (st.tab === 'indexes') {
+      const idx = await api('GET', `/api/tables/${schema}/${name}/indexes`);
+      renderIndexes(body, idx);
+    } else if (st.tab === 'fk') {
+      const fks = await api('GET', `/api/tables/${schema}/${name}/foreign-keys`);
+      renderForeignKeys(body, fks);
+    } else if (st.tab === 'triggers') {
+      const trigs = await api('GET', `/api/tables/${schema}/${name}/triggers`);
+      renderTriggers(body, trigs);
+    } else if (st.tab === 'ddl') {
+      const res = await api('GET', `/api/ddl/${schema}/${name}/script?objectType=TABLE`);
+      body.innerHTML = `<div class="ddl-wrap">${escHtml(res.script || '')}</div>`;
+    }
+  } catch(e) {
+    body.innerHTML = `<div class="empty"><p style="color:var(--red)">${escHtml(e.message)}</p></div>`;
+  }
+}
+
+function renderDataTable(body, key, schema, name, res, st) {
+  const total = res.totalCount;
+  const totalPages = Math.ceil(total / st.pageSize);
+  body.innerHTML = `
+    <div class="data-toolbar">
+      <input class="filter-input" id="filter-${key.replace(/\./g,'_')}" placeholder="WHERE clause filter…" value="${escHtml(st.filter||'')}"/>
+      <button class="btn" onclick="applyFilter('${key}','${schema}','${name}')">
+        <svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M1 3h12l-5 5v4l-2-1V8z"/></svg>
+        Filter
+      </button>
+      <div class="toolbar-spacer"></div>
+      <div class="pagination">
+        <button onclick="changePage('${key}','${schema}','${name}',-1)" ${st.page<=1?'disabled':''}>‹</button>
+        <span class="page-info">Page ${st.page} / ${totalPages||1}  &nbsp;·&nbsp; ${total.toLocaleString()} rows</span>
+        <button onclick="changePage('${key}','${schema}','${name}',1)" ${st.page>=totalPages?'disabled':''}>›</button>
+      </div>
+      <select class="search-input" style="width:auto" onchange="changePageSize('${key}','${schema}','${name}',this.value)">
+        ${[50,100,250,500].map(n=>`<option ${n===st.pageSize?'selected':''}>${n}</option>`).join('')}
+      </select>
+    </div>
+    <div class="data-table-wrap" style="flex:1;overflow:auto">
+      ${res.rows.length === 0
+        ? '<div class="empty"><p>No rows returned</p></div>'
+        : `<table>
+            <thead><tr>${res.columns.map(c => `<th class="sortable" onclick="sortBy('${key}','${schema}','${name}','${escHtml(c)}')">${escHtml(c)}${st.orderBy===c?(st.desc?'↓':'↑'):''}</th>`).join('')}</tr></thead>
+            <tbody>${res.rows.map(row => `<tr>${row.map((cell) => `<td class="mono">${cell == null ? '<span class="null-val">NULL</span>' : escHtml(String(cell))}</td>`).join('')}</tr>`).join('')}</tbody>
+           </table>`
+      }
+    </div>
+  `;
+}
+
+function applyFilter(key, schema, name) {
+  const val = document.getElementById(`filter-${key.replace(/\./g,'_')}`).value;
+  tableState[key].filter = val;
+  tableState[key].page = 1;
+  loadObjectTab(key, schema, name);
+}
+
+function changePage(key, schema, name, dir) {
+  tableState[key].page += dir;
+  loadObjectTab(key, schema, name);
+}
+
+function changePageSize(key, schema, name, val) {
+  tableState[key].pageSize = parseInt(val);
+  tableState[key].page = 1;
+  loadObjectTab(key, schema, name);
+}
+
+function sortBy(key, schema, name, col) {
+  const st = tableState[key];
+  if (st.orderBy === col) st.desc = !st.desc;
+  else { st.orderBy = col; st.desc = false; }
+  st.page = 1;
+  loadObjectTab(key, schema, name);
+}
+
+/* ──────────────────────────────────────────
+   COLUMNS
+────────────────────────────────────────── */
+function renderColumns(body, cols) {
+  body.innerHTML = `
+    <div class="data-table-wrap">
+      <table>
+        <thead><tr>
+          <th>#</th><th>Column</th><th>Type</th><th>Nullable</th><th>Keys</th><th>Identity</th><th>Default</th><th>Description</th>
+        </tr></thead>
+        <tbody>
+          ${cols.map(c => `<tr>
+            <td style="color:var(--text3)">${c.ordinalPosition}</td>
+            <td style="font-weight:500;color:var(--text)">${escHtml(c.name)}</td>
+            <td><span class="badge type">${escHtml(c.dataType)}${c.maxLength?`(${c.maxLength})`:c.precision?`(${c.precision},${c.scale||0})`:''}</span></td>
+            <td>${c.isNullable?'<span class="badge nullable">YES</span>':'<span style="color:var(--text3);font-size:12px">NO</span>'}</td>
+            <td style="display:flex;gap:4px;flex-wrap:wrap">${c.isPrimaryKey?'<span class="badge pk">PK</span>':''}${c.isForeignKey?'<span class="badge fk">FK</span>':''}</td>
+            <td>${c.isIdentity?'<span class="badge identity">AUTO</span>':''}</td>
+            <td class="mono" style="font-size:11px;color:var(--text3)">${c.defaultValue?escHtml(c.defaultValue):''}</td>
+            <td style="font-size:12px;color:var(--text2)">${c.description?escHtml(c.description):''}</td>
+          </tr>`).join('')}
+        </tbody>
+      </table>
+    </div>
+  `;
+}
+
+/* ──────────────────────────────────────────
+   INDEXES
+────────────────────────────────────────── */
+function renderIndexes(body, idxs) {
+  body.innerHTML = `
+    <div class="data-table-wrap">
+      <table>
+        <thead><tr><th>Index</th><th>Type</th><th>Columns</th><th>Included</th><th>Flags</th></tr></thead>
+        <tbody>
+          ${idxs.map(ix => `<tr>
+            <td style="font-weight:500;color:var(--text)">${escHtml(ix.name)}</td>
+            <td><span class="badge type">${escHtml(ix.indexType)}</span></td>
+            <td class="mono" style="font-size:12px">${ix.columns.join(', ')}</td>
+            <td class="mono" style="font-size:12px;color:var(--text3)">${ix.includedColumns.join(', ')}</td>
+            <td style="display:flex;gap:4px">
+              ${ix.isPrimaryKey?'<span class="badge pk">PK</span>':''}
+              ${ix.isUnique?'<span class="badge unique">UNIQUE</span>':''}
+              ${ix.isDisabled?'<span class="badge disabled">DISABLED</span>':''}
+            </td>
+          </tr>`).join('')}
+        </tbody>
+      </table>
+    </div>
+  `;
+}
+
+/* ──────────────────────────────────────────
+   FOREIGN KEYS
+────────────────────────────────────────── */
+function renderForeignKeys(body, fks) {
+  body.innerHTML = `
+    <div class="data-table-wrap">
+      <table>
+        <thead><tr><th>Name</th><th>Columns</th><th>References</th><th>On Delete</th><th>On Update</th></tr></thead>
+        <tbody>
+          ${fks.map(fk => `<tr>
+            <td style="font-weight:500;color:var(--text)">${escHtml(fk.name)}</td>
+            <td class="mono" style="font-size:12px">${fk.columns.join(', ')}</td>
+            <td><span style="color:var(--accent)">${escHtml(fk.referencedSchema)}.${escHtml(fk.referencedTable)}</span>
+                <span class="mono" style="font-size:11px;color:var(--text3)"> (${fk.referencedColumns.join(', ')})</span></td>
+            <td><span class="badge ${fk.onDelete==='CASCADE'?'cascade':'noaction'}">${escHtml(fk.onDelete)}</span></td>
+            <td><span class="badge ${fk.onUpdate==='CASCADE'?'cascade':'noaction'}">${escHtml(fk.onUpdate)}</span></td>
+          </tr>`).join('')}
+        </tbody>
+      </table>
+    </div>
+  `;
+}
+
+/* ──────────────────────────────────────────
+   TRIGGERS
+────────────────────────────────────────── */
+function renderTriggers(body, trigs) {
+  body.innerHTML = `
+    <div class="data-table-wrap">
+      <table>
+        <thead><tr><th>Name</th><th>Event</th><th>Timing</th><th>Status</th><th>Definition</th></tr></thead>
+        <tbody>
+          ${trigs.map(t => `<tr>
+            <td style="font-weight:500;color:var(--text)">${escHtml(t.name)}</td>
+            <td><span class="badge type">${escHtml(t.event)}</span></td>
+            <td>${escHtml(t.timing)}</td>
+            <td><span class="badge ${t.isEnabled?'enabled':'disabled'}">${t.isEnabled?'ENABLED':'DISABLED'}</span></td>
+            <td style="max-width:300px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-family:var(--font-mono);font-size:11px;color:var(--text3)">${t.definition?escHtml(t.definition.substring(0,80))+'…':''}</td>
+          </tr>`).join('')}
+        </tbody>
+      </table>
+    </div>
+  `;
+}
+
+/* ──────────────────────────────────────────
+   VIEW TAB
+────────────────────────────────────────── */
+function openViewTab(schema, name) {
+  openTab(`${schema}.${name} (view)`, 'view', { schema, name });
+}
+
+function renderViewDetails(c, { schema, name }) {
+  c.innerHTML = `<div id="data-panel">
+    <div class="object-header">
+      <h1>${escHtml(schema)}.${escHtml(name)} <span class="badge view" style="vertical-align:middle">VIEW</span></h1>
+      <div class="object-tabs">
+        <div class="object-tab active" onclick="loadViewColumns('${schema}','${name}',this)">Columns</div>
+        <div class="object-tab" onclick="loadViewDef('${schema}','${name}',this)">Definition</div>
+      </div>
+    </div>
+    <div id="view-body" style="flex:1;overflow:hidden;display:flex;flex-direction:column"></div>
+  </div>`;
+  loadViewColumns(schema, name);
+}
+
+async function loadViewColumns(schema, name, tabEl) {
+  setActiveObjectTab(tabEl);
+  const body = document.getElementById('view-body');
+  body.innerHTML = '<div style="flex:1;display:flex;align-items:center;justify-content:center"><span class="spinner"></span></div>';
+  try {
+    const cols = await api('GET', `/api/views/${schema}/${name}/columns`);
+    renderColumns(body, cols);
+  } catch(e) { body.innerHTML = `<div class="empty"><p style="color:var(--red)">${escHtml(e.message)}</p></div>`; }
+}
+
+async function loadViewDef(schema, name, tabEl) {
+  setActiveObjectTab(tabEl);
+  const body = document.getElementById('view-body');
+  body.innerHTML = '<div style="flex:1;display:flex;align-items:center;justify-content:center"><span class="spinner"></span></div>';
+  try {
+    const res = await api('GET', `/api/views/${schema}/${name}/definition`);
+    body.innerHTML = `<div class="ddl-wrap">${escHtml(res.definition||'')}</div>`;
+  } catch(e) { body.innerHTML = `<div class="empty"><p style="color:var(--red)">${escHtml(e.message)}</p></div>`; }
+}
+
+function setActiveObjectTab(el) {
+  if (!el) return;
+  const parent = el.parentElement;
+  parent.querySelectorAll('.object-tab').forEach(t => t.classList.remove('active'));
+  el.classList.add('active');
+}
+
+/* ──────────────────────────────────────────
+   DEFINITION TAB (PROC/FUNC)
+────────────────────────────────────────── */
+function openDefinitionTab(schema, name, type) {
+  openTab(`${schema}.${name}`, 'definition', { schema, name, type });
+}
+
+async function renderDefinition(c, { schema, name, type }) {
+  c.innerHTML = `<div id="data-panel">
+    <div class="object-header">
+      <h1>${escHtml(schema)}.${escHtml(name)} <span class="badge ${type==='PROCEDURE'?'proc':'func'}" style="vertical-align:middle">${type}</span></h1>
+      <div class="object-tabs">
+        <div class="object-tab active" id="def-tab-def">Definition</div>
+        <div class="object-tab" id="def-tab-params" onclick="loadParams('${schema}','${name}','${type}',this)">Parameters</div>
+      </div>
+    </div>
+    <div id="def-body" style="flex:1;overflow:hidden;display:flex;flex-direction:column"><div style="flex:1;display:flex;align-items:center;justify-content:center"><span class="spinner"></span></div></div>
+  </div>`;
+  try {
+    const path = type === 'PROCEDURE' ? `/api/programmability/procedures/${schema}/${name}/definition`
+                                       : `/api/programmability/functions/${schema}/${name}/definition`;
+    const res = await api('GET', path);
+    document.getElementById('def-body').innerHTML = `<div class="ddl-wrap">${escHtml(res.definition||'')}</div>`;
+  } catch(e) {
+    document.getElementById('def-body').innerHTML = `<div class="empty"><p style="color:var(--red)">${escHtml(e.message)}</p></div>`;
+  }
+}
+
+async function loadParams(schema, name, type, tabEl) {
+  setActiveObjectTab(tabEl);
+  const body = document.getElementById('def-body');
+  body.innerHTML = '<div style="flex:1;display:flex;align-items:center;justify-content:center"><span class="spinner"></span></div>';
+  try {
+    const path = type === 'PROCEDURE' ? `/api/programmability/procedures/${schema}/${name}/parameters`
+                                       : `/api/programmability/functions/${schema}/${name}/parameters`;
+    const params = await api('GET', path);
+    body.innerHTML = `
+      <div class="data-table-wrap">
+        <table>
+          <thead><tr><th>#</th><th>Name</th><th>Mode</th><th>Type</th><th>Default</th></tr></thead>
+          <tbody>${params.map(p=>`<tr>
+            <td style="color:var(--text3)">${p.ordinalPosition}</td>
+            <td style="font-weight:500;color:var(--text)">${escHtml(p.name)}</td>
+            <td><span class="badge ${p.mode==='OUT'||p.mode==='INOUT'?'fk':'type'}">${p.mode}</span></td>
+            <td><span class="badge type">${escHtml(p.dataType)}</span></td>
+            <td class="mono" style="font-size:11px;color:var(--text3)">${p.defaultValue?escHtml(p.defaultValue):''}</td>
+          </tr>`).join('')}</tbody>
+        </table>
+      </div>
+    `;
+  } catch(e) { body.innerHTML = `<div class="empty"><p style="color:var(--red)">${escHtml(e.message)}</p></div>`; }
+}
+
+/* ──────────────────────────────────────────
+   SEQUENCES TAB
+────────────────────────────────────────── */
+function openSeqTab(schema, name) {
+  openTab(`Sequences`, 'sequences', { schema, name });
+}
+
+async function renderSequences(c, { schema }) {
+  c.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:100%"><span class="spinner"></span></div>';
+  try {
+    const seqs = await api('GET', '/api/sequences');
+    c.innerHTML = `
+      <div class="data-table-wrap" style="height:100%">
+        <table>
+          <thead><tr><th>Schema</th><th>Name</th><th>Type</th><th>Start</th><th>Increment</th><th>Min</th><th>Max</th><th>Current</th><th>Cyclic</th></tr></thead>
+          <tbody>${seqs.map(s=>`<tr>
+            <td style="color:var(--text3)">${escHtml(s.schema)}</td>
+            <td style="font-weight:500;color:var(--text)">${escHtml(s.name)}</td>
+            <td><span class="badge type">${escHtml(s.dataType)}</span></td>
+            <td class="mono">${s.startValue}</td>
+            <td class="mono">${s.increment}</td>
+            <td class="mono" style="color:var(--text3)">${s.minValue??'—'}</td>
+            <td class="mono" style="color:var(--text3)">${s.maxValue??'—'}</td>
+            <td class="mono" style="color:var(--accent)">${s.currentValue??'—'}</td>
+            <td>${s.isCyclic?'<span class="badge enabled">YES</span>':'<span style="color:var(--text3)">NO</span>'}</td>
+          </tr>`).join('')}</tbody>
+        </table>
+      </div>
+    `;
+  } catch(e) { c.innerHTML = `<div class="empty"><p style="color:var(--red)">${escHtml(e.message)}</p></div>`; }
+}
+
+/* ──────────────────────────────────────────
+   QUERY EDITOR
+────────────────────────────────────────── */
+function openQueryTab() {
+  openTab('Query', 'query', { sql: 'SELECT 1', result: null });
+}
+
+function renderQueryEditor(c, data) {
+  c.innerHTML = `<div id="query-panel">
+    <div id="query-editor-wrap">
+      <div id="query-toolbar">
+        <button class="btn primary" onclick="runQuery()">
+          <svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M3 2l9 5-9 5z"/></svg>
+          Run
+        </button>
+        <span style="font-size:12px;color:var(--text3)">Ctrl+Enter</span>
+        <div class="toolbar-spacer"></div>
+        <input class="search-input" type="number" id="q-maxrows" value="1000" style="width:90px" title="Max rows"/>
+        <span style="font-size:12px;color:var(--text3)">max rows</span>
+      </div>
+      <textarea id="query-editor" spellcheck="false">${escHtml(data.sql||'SELECT 1')}</textarea>
+    </div>
+    <div id="query-results">
+      <div class="empty" style="color:var(--text3)"><p>Run a query to see results</p></div>
+    </div>
+  </div>`;
+
+  document.getElementById('query-editor').addEventListener('keydown', e => {
+    if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') { e.preventDefault(); runQuery(); }
+  });
+}
+
+async function runQuery() {
+  const sql = document.getElementById('query-editor')?.value;
+  const maxRows = parseInt(document.getElementById('q-maxrows')?.value || '1000');
+  if (!sql) return;
+  const res_el = document.getElementById('query-results');
+  res_el.innerHTML = '<div style="flex:1;display:flex;align-items:center;justify-content:center"><span class="spinner"></span></div>';
+  try {
+    const res = await api('POST', '/api/data/query', { Sql: sql, MaxRows: maxRows, TimeoutSeconds: 30 });
+    const statusCls = res.success ? 'ok' : 'err';
+    res_el.innerHTML = `
+      <div class="result-meta">
+        <span class="${statusCls}">${res.success?'✓ Success':'✗ Error'}</span>
+        <span>${res.elapsedMs} ms</span>
+        ${res.rowsAffected >= 0 ? `<span>${res.rowsAffected} rows affected</span>` : ''}
+        ${res.error ? `<span style="color:var(--red)">${escHtml(res.error)}</span>` : ''}
+      </div>
+      <div class="data-table-wrap" style="flex:1;overflow:auto">
+        ${res.rows && res.rows.length > 0
+          ? `<table>
+              <thead><tr>${res.columns.map(c=>`<th>${escHtml(c)}</th>`).join('')}</tr></thead>
+              <tbody>${res.rows.map(row=>`<tr>${row.map(cell=>`<td class="mono">${cell==null?'<span class="null-val">NULL</span>':escHtml(String(cell))}</td>`).join('')}</tr>`).join('')}</tbody>
+             </table>`
+          : '<div class="empty"><p>No rows returned</p></div>'
+        }
+      </div>
+    `;
+  } catch(e) {
+    res_el.innerHTML = `<div class="result-meta"><span class="err">✗ ${escHtml(e.message)}</span></div>`;
+  }
+}
+
+/* ──────────────────────────────────────────
+   RESIZER
+────────────────────────────────────────── */
+(function() {
+  const resizer = document.getElementById('resizer');
+  const sidebar = document.getElementById('sidebar');
+  let dragging = false, startX = 0, startW = 0;
+  resizer.addEventListener('mousedown', e => {
+    dragging = true; startX = e.clientX; startW = sidebar.offsetWidth;
+    resizer.classList.add('dragging');
+    document.body.style.userSelect = 'none';
+  });
+  document.addEventListener('mousemove', e => {
+    if (!dragging) return;
+    const w = Math.max(160, Math.min(400, startW + e.clientX - startX));
+    sidebar.style.width = w + 'px'; sidebar.style.minWidth = w + 'px';
+  });
+  document.addEventListener('mouseup', () => {
+    dragging = false; resizer.classList.remove('dragging');
+    document.body.style.userSelect = '';
+  });
+})();
+
+/* ──────────────────────────────────────────
+   UTILS
+────────────────────────────────────────── */
+function escHtml(s) {
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+/* ──────────────────────────────────────────
+   INIT
+────────────────────────────────────────── */
+showConnectModal();
+</script>
+</body>
+</html>

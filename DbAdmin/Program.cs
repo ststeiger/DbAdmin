@@ -18,16 +18,17 @@ public class Program
         Microsoft.AspNetCore.Builder.WebApplicationBuilder builder = 
             Microsoft.AspNetCore.Builder.WebApplication.CreateBuilder(args)
         ;
-
-        /*
-        builder.WebHost.ConfigureKestrel(options =>
+        
+        if (!System.OperatingSystem.IsWindows())
         {
-            options.ListenAnyIP(5000, listenOptions =>
+            builder.WebHost.ConfigureKestrel(options =>
             {
-                listenOptions.UseConnectionLogging(); // optional
+                options.ListenAnyIP(5000, listenOptions =>
+                {
+                    listenOptions.UseConnectionLogging(); // optional
+                });
             });
-        });
-        */
+        }
 
 
 
